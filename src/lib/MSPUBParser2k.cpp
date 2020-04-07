@@ -398,6 +398,10 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_contentChunks.push_back(ContentChunkReference(FONT, chunkOffset, 0, id, parent));
       m_fontChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
       break;
+    case 0x0001:
+      m_contentChunks.push_back(ContentChunkReference(TABLE, chunkOffset, 0, id, parent));
+      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      break;
     case 0x0002:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found image_2k chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K, chunkOffset, 0, id, parent));
@@ -765,6 +769,9 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
   case 8: // new text in QUILL
     m_collector->setShapeType(chunk.seqNum, RECTANGLE);
     header.m_type=C_Text;
+    break;
+  case 1:
+    header.m_type=C_Table;
     break;
   case 2:
     header.m_type=C_Image;

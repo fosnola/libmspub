@@ -16,6 +16,7 @@
 
 #include "MSPUBCollector.h"
 #include "MSPUBTypes.h"
+#include "TableInfo.h"
 #include "libmspub_utils.h"
 
 namespace libmspub
@@ -56,6 +57,13 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   unsigned version=readU16(input);
   if (version>=200 && version<300) m_version=2; // mspub 2
   // fixme: find also a method to differentiate mspub 3 and 97
+  if (m_version<=2)
+  {
+    // set the default parameter
+    CharacterStyle defaultCharStyle;
+    defaultCharStyle.textSizeInPt=10;
+    m_collector->addDefaultCharacterStyle(defaultCharStyle);
+  }
   input->seek(blockStart+14, librevenge::RVNG_SEEK_SET);
   unsigned textStart = readU32(input);
   unsigned textEnd = readU32(input);
@@ -72,6 +80,8 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   {
     for (unsigned id=index[1]; id<index[2]; ++id)
       parseParagraphStyles(input, id, paraStyles, posToParaMap);
+    //for (unsigned id=index[2]; id<index[3]; ++id)
+    //  parseCellStyles(input, id, paraStyles, posToParaMap);
   }
 
   input->seek(textStart, librevenge::RVNG_SEEK_SET);
@@ -84,10 +94,12 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   std::vector<TextParagraph> shapeParas;
   std::vector<TextSpan> paraSpans;
   std::vector<unsigned char> spanChars;
+  std::vector<unsigned> cellEnds;
   CharacterStyle charStyle;
   ParagraphStyle paraStyle;
 
   unsigned oldParaPos=0; // used to check for empty line
+  unsigned actChar=0;
   for (unsigned c=0; c<length; ++c)
   {
     // change of style
@@ -97,6 +109,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     {
       if (!spanChars.empty())
       {
+        actChar+=spanChars.size();
         paraSpans.push_back(TextSpan(spanChars,charStyle));
         spanChars.clear();
       }
@@ -109,11 +122,18 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     {
       if (!spanChars.empty())
       {
+        actChar+=spanChars.size();
         paraSpans.push_back(TextSpan(spanChars,charStyle));
         spanChars.clear();
       }
-      if (!paraSpans.empty() ||
-          (oldParaPos>=actPos-3 && (specialIt!=posToTypeMap.end() || specialIt->second!=ShapeEnd))) // empty line
+      bool needNewPara=!paraSpans.empty();
+      if (!needNewPara && oldParaPos>=actPos-3)   // potential empty line
+      {
+        auto sIt=specialIt;
+        if (sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd) ++sIt;
+        needNewPara=sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd;
+      }
+      if (needNewPara)
       {
         shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
         paraSpans.clear();
@@ -127,6 +147,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     {
       if (!spanChars.empty())
       {
+        actChar+=spanChars.size();
         paraSpans.push_back(TextSpan(spanChars,charStyle));
         spanChars.clear();
       }
@@ -144,11 +165,19 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
         paraSpans.clear();
       }
+      if (specialIt->second==CellEnd)
+        cellEnds.push_back(actChar+1); // offset begin at 1...
       if (specialIt->second==ShapeEnd)
       {
+        if (!cellEnds.empty())
+        {
+          m_collector->setTableCellTextEnds(shape,cellEnds);
+          cellEnds.clear();
+        }
         m_collector->addTextString(shapeParas, shape++);
         charStyle=CharacterStyle();
         shapeParas.clear();
+        actChar=0;
       }
       continue;
     }
@@ -162,7 +191,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     {
       // 0d 0a end of line (but also end of paragraph)
     }
-    else if (ch==0x5 || ch==0x9 || ch>0x1f)
+    else if (ch==0x9 || ch==0xf || ch>0x1f) // 0xf: means cells separator
     {
       spanChars.push_back(ch);
     }
@@ -173,11 +202,18 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   }
   // check if no data remain
   if (!spanChars.empty())
+  {
+    actChar+=spanChars.size();
     paraSpans.push_back(TextSpan(spanChars,charStyle));
+  }
   if (!paraSpans.empty())
     shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
   if (!shapeParas.empty())
+  {
+    if (!cellEnds.empty())
+      m_collector->setTableCellTextEnds(shape,cellEnds);
     m_collector->addTextString(shapeParas, shape++);
+  }
 }
 
 bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,
@@ -479,6 +515,8 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
       posToType[pos]=LineEnd;
     else if (ch == 0xC)
       posToType[pos]=ShapeEnd;
+    else if (ch == 0xF)
+      posToType[pos]=CellEnd;
     else if (last=='#' && ch==0x5)
       posToType[pos-1]=FieldBegin;
     last = ch;
@@ -547,6 +585,36 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       unsigned txtId = readU16(input);
       m_collector->addTextShape(txtId, seqNum);
+    }
+    else if (header.m_type == C_Table)
+    {
+      input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
+      m_collector->addTextShape(readU16(input), seqNum);
+      input->seek(2, librevenge::RVNG_SEEK_CUR); // data size
+      unsigned numCols = readU16(input);
+      unsigned numRows = readU16(input);
+      unsigned width=readU32(input);
+      unsigned height=readU32(input);
+      if (numRows && numCols)
+      {
+        TableInfo ti(numRows, numCols);
+
+        std::vector<unsigned> rowHeightsInEmu(size_t(numRows),height/numRows);
+        std::vector<unsigned> columnWidthsInEmu(size_t(numCols),width/numCols);
+        ti.m_rowHeightsInEmu = rowHeightsInEmu;
+        ti.m_columnWidthsInEmu = columnWidthsInEmu;
+        for (unsigned r=0; r<numRows; r++)
+        {
+          CellInfo cellInfo;
+          cellInfo.m_startRow=cellInfo.m_endRow=r;
+          for (unsigned c=0; c<numCols; c++)
+          {
+            cellInfo.m_startColumn=cellInfo.m_endColumn=c;
+            ti.m_cells.push_back(cellInfo);
+          }
+        }
+        m_collector->setShapeTableInfo(seqNum, ti);
+      }
     }
   }
   else if (header.m_type==C_CustomShape)

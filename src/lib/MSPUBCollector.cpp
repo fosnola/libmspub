@@ -247,7 +247,6 @@ void mapTableTextToCells(
       firstPara = para + 1;
     }
   }
-
   assert(paraTexts.size() == text.size());
   assert(paraToCellMap.size() <= tableCellTextEnds.size());
 }

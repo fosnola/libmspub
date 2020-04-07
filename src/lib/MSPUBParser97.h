@@ -18,7 +18,7 @@ namespace libmspub
 {
 class MSPUBParser97 : public MSPUBParser2k
 {
-  enum What { LineEnd, ShapeEnd, FieldBegin };
+  enum What { LineEnd, ShapeEnd, FieldBegin, CellEnd };
 
   struct SpanInfo97
   {
@@ -35,6 +35,7 @@ class MSPUBParser97 : public MSPUBParser2k
   unsigned getShapeFillTypeOffset() const override;
   unsigned getShapeFillColorOffset() const override;
   unsigned getTextIdOffset() const override;
+
   void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                         ChunkHeader2k const &header) override;
   bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
