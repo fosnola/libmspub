@@ -68,8 +68,11 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     parseSpanStyles(input, id, spanStyles, posToSpanMap);
   std::vector<ParagraphStyle> paraStyles;
   std::map<unsigned, unsigned> posToParaMap;
-  for (unsigned id=index[1]; id<index[2]; ++id)
-    parseParagraphStyles(input, id, paraStyles, posToParaMap);
+  if (m_version<=2)
+  {
+    for (unsigned id=index[1]; id<index[2]; ++id)
+      parseParagraphStyles(input, id, paraStyles, posToParaMap);
+  }
 
   input->seek(textStart, librevenge::RVNG_SEEK_SET);
   std::map<unsigned,MSPUBParser97::What> posToTypeMap;
@@ -425,25 +428,30 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
     int baseLine=readS8(input);
     style.superSubType = baseLine<0 ? SUBSCRIPT : baseLine>0 ? SUPERSCRIPT : NO_SUPER_SUB;
   }
-  // 8: color?
+  if (length >= 8)
+  {
+    if (m_version<=2)
+      style.colorIndex = getColorIndexByQuillEntry(readU8(input));
+    else
+      input->seek(1, librevenge::RVNG_SEEK_CUR);
+  }
   if (length >= 9)
   {
-    input->seek(begin + 0x8, librevenge::RVNG_SEEK_SET);
-    unsigned char fl1=readU8(input), fl2=0;
-    if (fl1&0x7f)
+    unsigned char fl1=readU8(input);
+    switch (fl1&3)
     {
-      unsigned stretch=fl1&0x7f;
-      style.letterSpacingInPt=double(stretch)/4;
-      if (stretch>88) // check limit
-        style.letterSpacingInPt=*style.letterSpacingInPt-double(0x80)/4;
-    }
-    if (length>=10) fl2=readU8(input);
-    if ((fl1&0x80) && (fl2&1))
-      style.underline = Underline::Double;
-    else if ((fl1&0x80) || (fl2&1)) // fl1&0x80: underline all, fl2&1: underline word
+    case 0: // none
+      break;
+    case 1:
+    case 2:
       style.underline = Underline::Single;
+      break;
+    case 3:
+      style.underline = Underline::Double;
+      break;
+    }
   }
-  if (length >= 16)
+  if (length >= 16 && m_version>2)
   {
     input->seek(begin + 0xC, librevenge::RVNG_SEEK_SET);
     style.colorIndex = getColorIndexByQuillEntry(readU32(input));
