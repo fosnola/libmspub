@@ -259,12 +259,14 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   unsigned plcs[5];
   for (auto &p : plcs) p = readU32(input);
 
-  std::map<unsigned, CharacterStyle> posToSpanMap;
+  std::vector<CharacterStyle> spanStyles;
+  std::map<unsigned, unsigned> posToSpanMap;
   for (unsigned id=index[0]; id<index[1]; ++id)
-    parseSpanStyles(input, id, posToSpanMap);
-  std::map<unsigned, ParagraphStyle> posToParaMap;
+    parseSpanStyles(input, id, spanStyles, posToSpanMap);
+  std::vector<ParagraphStyle> paraStyles;
+  std::map<unsigned, unsigned> posToParaMap;
   for (unsigned id=index[1]; id<index[2]; ++id)
-    parseParagraphStyles(input, id, posToParaMap);
+    parseParagraphStyles(input, id, paraStyles, posToParaMap);
 
   std::vector<unsigned> textLimits;
   if (plcs[2] && input->seek(plcs[2], librevenge::RVNG_SEEK_SET)==0)
@@ -305,7 +307,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       if (pIt!=posToParaMap.begin())
       {
         --pIt;
-        if (pIt->first>=input->tell()-2) paraStyle=pIt->second;
+        if (pIt->first>=input->tell()-2 && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
       }
       for (unsigned p=textLimits[i]; p<textLimits[i+1]; ++p)
       {
@@ -317,7 +319,8 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
             paraSpans.push_back(TextSpan(spanChars,charStyle));
             spanChars.clear();
           }
-          charStyle=cIt->second;
+          if (cIt->second<spanStyles.size())
+            charStyle=spanStyles[cIt->second];
         }
         pIt=posToParaMap.find(input->tell());
         if (pIt!=posToParaMap.end())
@@ -332,7 +335,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
             shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
             paraSpans.clear();
           }
-          paraStyle=pIt->second;
+          if (pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
         }
         unsigned char ch=readU8(input);
         if (ch == 0xB) // Pub97 interprets vertical tab as nonbreaking space.
@@ -381,7 +384,6 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       }
       if (!spanChars.empty())
         paraSpans.push_back(TextSpan(spanChars,charStyle));
-      if (paraStyle.m_align)  std::cout << "align=" << *paraStyle.m_align << "\n";
       if (!paraSpans.empty())
         shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
       m_collector->addTextString(shapeParas, zId);
@@ -389,7 +391,9 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   }
 }
 
-bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index, std::map<unsigned, ParagraphStyle> &posToStyle)
+bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,
+                                         std::vector<ParagraphStyle> &styles,
+                                         std::map<unsigned, unsigned> &posToStyle)
 {
   if (input->seek((index+1)*0x200-1, librevenge::RVNG_SEEK_SET)!=0)
   {
@@ -409,12 +413,17 @@ bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
   std::vector<uint8_t> stylePos;
   stylePos.reserve(N);
   for (unsigned i=0; i<N; ++i) stylePos.push_back(readU8(input));
+  if (styles.empty()) // create an empty style
+    styles.push_back(ParagraphStyle());
+  std::map<unsigned, unsigned> offsetToStyleMap;
+  offsetToStyleMap[0]=0;
   for (unsigned i=0; i<N; ++i)
   {
     auto const &offs=stylePos[i];
-    if (offs==0)
+    auto oIt=offsetToStyleMap.find(offs);
+    if (oIt!=offsetToStyleMap.end())
     {
-      posToStyle[positions[i]]=ParagraphStyle();
+      posToStyle[positions[i]]=oIt->second;
       continue;
     }
     input->seek(index*0x200+2*offs, librevenge::RVNG_SEEK_SET); // skip small size
@@ -423,7 +432,7 @@ bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
     if (tabPos<2 || 2*offs+1+tabPos>0x200 || 2*len+1<tabPos)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseParagraphStyles: can not read len for i=%x for index=%x\n", i, index));
-      posToStyle[positions[i]]=ParagraphStyle();
+      posToStyle[positions[i]]=0;
       continue;
     }
     input->seek(1,librevenge::RVNG_SEEK_CUR); // 0
@@ -538,12 +547,17 @@ bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
         }
       }
     }
-    posToStyle[positions[i]]=style;
+    unsigned newId=styles.size();
+    posToStyle[positions[i]]=newId;
+    offsetToStyleMap[offs]=newId;
+    styles.push_back(style);
   }
   return true;
 }
 
-bool MSPUBParser91::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index, std::map<unsigned, CharacterStyle> &posToStyle)
+bool MSPUBParser91::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
+                                    std::vector<CharacterStyle> &styles,
+                                    std::map<unsigned, unsigned> &posToStyle)
 {
   if (input->seek((index+1)*0x200-1, librevenge::RVNG_SEEK_SET)!=0)
   {
@@ -563,13 +577,17 @@ bool MSPUBParser91::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned
   std::vector<uint8_t> stylePos;
   stylePos.reserve(N);
   for (unsigned i=0; i<N; ++i) stylePos.push_back(readU8(input));
-
+  if (styles.empty())
+    styles.push_back(CharacterStyle());
+  std::map<unsigned, unsigned> offsetToStyleMap;
+  offsetToStyleMap[0]=0;
   for (unsigned i=0; i<N; ++i)
   {
     auto const &offs=stylePos[i];
-    if (offs==0)
+    auto oIt=offsetToStyleMap.find(offs);
+    if (oIt!=offsetToStyleMap.end())
     {
-      posToStyle[positions[i]]=CharacterStyle();
+      posToStyle[positions[i]]=oIt->second;
       continue;
     }
     input->seek(index*0x200+2*offs, librevenge::RVNG_SEEK_SET);
@@ -577,7 +595,7 @@ bool MSPUBParser91::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned
     if (len==0 || 2*offs+1+len>0x200)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseSpanStyles: can not read len for i=%x for index=%x\n", i, index));
-      posToStyle[positions[i]]=CharacterStyle();
+      posToStyle[positions[i]]=0;
       continue;
     }
     CharacterStyle style;
@@ -624,7 +642,10 @@ bool MSPUBParser91::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned
     }
     style.textSizeInPt = 10 +
                          static_cast<double>(textSizeVariationFromDefault) / 2;
-    posToStyle[positions[i]]=style;
+    unsigned newId=styles.size();
+    posToStyle[positions[i]]=newId;
+    offsetToStyleMap[offs]=newId;
+    styles.push_back(style);
   }
   return true;
 }
@@ -982,7 +1003,6 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       if (oIt!=offsetToImage.end())
       {
         m_collector->setBorderImageOffset(i,oIt->second);
-        std::cout << "ADD " << oIt->second << "\n";
         continue;
       }
       input->seek(header.m_positions[i]+decal[off], librevenge::RVNG_SEEK_SET);
@@ -1015,7 +1035,6 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       unsigned newId=offsetToImage.size();
       m_collector->setBorderImageOffset(i,newId);
       offsetToImage[decal[off]]=newId;
-      std::cout << "ADD " << newId << "\n";
     }
   }
   return true;

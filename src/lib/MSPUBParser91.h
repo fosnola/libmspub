@@ -53,8 +53,10 @@ protected:
 
   bool parseZoneHeader(librevenge::RVNGInputStream *input, ZoneHeader91 &header, bool doNotReadPositions);
   bool parseTextPLCHeader(librevenge::RVNGInputStream *input, TextPLCHeader91 &header);
-  bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index, std::map<unsigned, CharacterStyle> &posToStyle);
-  bool parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index, std::map<unsigned, ParagraphStyle> &posToStyle);
+  bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
+                       std::vector<CharacterStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
+  bool parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,
+                            std::vector<ParagraphStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
 
   //! try to parse a OLE image (only embedded image)
   bool parseOLEPicture(librevenge::RVNGInputStream *input, unsigned length, ImgType &type, librevenge::RVNGBinaryData &img);
