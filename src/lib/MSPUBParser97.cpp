@@ -590,7 +590,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       m_collector->addTextShape(readU16(input), seqNum);
-      input->seek(2, librevenge::RVNG_SEEK_CUR); // data size
+      input->seek(2, librevenge::RVNG_SEEK_CUR); // data size ?
       unsigned numCols = readU16(input);
       unsigned numRows = readU16(input);
       unsigned width=readU32(input);
@@ -598,7 +598,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       if (numRows && numCols)
       {
         TableInfo ti(numRows, numCols);
-
+        // FIXME
         std::vector<unsigned> rowHeightsInEmu(size_t(numRows),height/numRows);
         std::vector<unsigned> columnWidthsInEmu(size_t(numCols),width/numCols);
         ti.m_rowHeightsInEmu = rowHeightsInEmu;

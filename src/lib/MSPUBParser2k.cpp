@@ -580,9 +580,21 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
       ListHeader2k listHeader;
       if (parseListHeader(input, chunk.end, listHeader, false) && listHeader.m_dataSize==2)
       {
-        input->seek(4, librevenge::RVNG_SEEK_CUR);
+        input->seek(2, librevenge::RVNG_SEEK_CUR);
+        unsigned masterId=readU16(input);
+        std::vector<unsigned> pages;
         for (int pg=2; pg<listHeader.m_N; ++pg)
-          m_collector->addPage(readU16(input));
+        {
+          pages.push_back(readU16(input));
+          m_collector->addPage(pages.back());
+        }
+        if (m_version<=2)
+        {
+          m_collector->addPage(masterId);
+          m_collector->designateMasterPage(masterId);
+          for (auto p : pages)
+            m_collector->setMasterPage(p, masterId);
+        }
       }
     }
     else
@@ -825,7 +837,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 
   unsigned page = pageSeqNum.get_value_or(chunk.parentSeqNum);
   input->seek(chunk.offset, librevenge::RVNG_SEEK_SET);
-  if (topLevelCall)
+  if (topLevelCall && m_version>2)
   {
     // ignore non top level shapes
     int i_page = -1;
