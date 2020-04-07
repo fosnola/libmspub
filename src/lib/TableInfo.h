@@ -38,6 +38,12 @@ struct CellInfo
 
 struct CellStyle
 {
+  CellStyle()
+    : m_borders()
+    , m_color()
+    , m_flags(0)
+  {
+  }
   std::vector<Line> m_borders;
   boost::optional<ColorReference> m_color;
   unsigned m_flags;

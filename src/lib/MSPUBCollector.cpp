@@ -9,6 +9,8 @@
 
 #include "MSPUBCollector.h"
 
+#include <string.h>
+
 #include <algorithm>
 #include <functional>
 #include <math.h>
@@ -41,6 +43,10 @@ namespace libmspub
 
 struct TextLineState
 {
+  TextLineState():
+    m_list()
+  {
+  }
   boost::optional<ListInfo> m_list;
 };
 

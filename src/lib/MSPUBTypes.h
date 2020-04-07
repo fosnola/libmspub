@@ -184,6 +184,12 @@ struct TabStop
 
 struct DropCapStyle
 {
+  DropCapStyle()
+    : m_style()
+    , m_lines()
+    , m_letters()
+  {
+  }
   boost::optional<CharacterStyle> m_style;
   boost::optional<unsigned> m_lines;
   boost::optional<unsigned> m_letters;
