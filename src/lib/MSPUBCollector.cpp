@@ -1908,7 +1908,7 @@ bool MSPUBCollector::go()
     pageList.reserve(m_pageSeqNumsOrdered.size());
     for (unsigned int i : m_pageSeqNumsOrdered)
     {
-      if (m_pagesBySeqNum.find(i) != m_pagesBySeqNum.end())
+      if (m_pagesBySeqNum.find(i) != m_pagesBySeqNum.end() && !pageIsMaster(i))
         pageList.push_back(i);
     }
   }

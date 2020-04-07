@@ -109,6 +109,7 @@ protected:
   static PageType getPageTypeBySeqNum(unsigned seqNum);
   virtual void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input);
   bool parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition);
+  bool parseIdList(librevenge::RVNGInputStream *input, unsigned long endPos, std::vector<unsigned> &ids);
   bool parseBorderArt(librevenge::RVNGInputStream *input, unsigned borderNum, unsigned endPos);
 public:
   explicit MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector);

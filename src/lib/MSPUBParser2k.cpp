@@ -610,25 +610,21 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
     if (header.hasData())
     {
       input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
-      ListHeader2k listHeader;
-      if (parseListHeader(input, chunk.end, listHeader, false) && listHeader.m_dataSize==2)
+      std::vector<unsigned> pages;
+      if (parseIdList(input, chunk.end, pages) && pages.size()>=2)
       {
-        input->seek(2, librevenge::RVNG_SEEK_CUR);
-        unsigned masterId=readU16(input);
-        std::vector<unsigned> pages;
-        for (int pg=2; pg<listHeader.m_N; ++pg)
-        {
-          if (m_version==3 && pg+1==listHeader.m_N) break; // what is the last page?
-          pages.push_back(readU16(input));
-          m_collector->addPage(pages.back());
-        }
+        unsigned masterId=pages[1];
+        if (m_version==3) pages.pop_back(); // what is the last page
+        for (size_t i=2; i<pages.size(); ++i)
+          m_collector->addPage(pages[i]);
         if (m_version<=3)
         {
           m_collector->addPage(masterId);
           m_collector->designateMasterPage(masterId);
           parsePage(input, masterId);
-          for (auto p : pages)
+          for (size_t i=2; i<pages.size(); ++i)
           {
+            auto p = pages[i];
             m_collector->setNextPage(p);
             m_collector->setMasterPage(p, masterId);
             parsePage(input, p);
@@ -662,15 +658,14 @@ bool MSPUBParser2k::parsePage(librevenge::RVNGInputStream *input, unsigned seqNu
     return false;
   }
   input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
-  ListHeader2k listHeader;
-  if (!parseListHeader(input, chunk.end, listHeader, false) || listHeader.m_dataSize!=2)
+  std::vector<unsigned> ids;
+  if (!parseIdList(input, chunk.end, ids))
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not read the page list %x\n", seqNum));
     return false;
   }
-  for (int shapeId=0; shapeId<listHeader.m_N; ++shapeId)
+  for (auto cId : ids)
   {
-    unsigned cId=readU16(input);
     auto cIt=m_fileIdToChunkId.find(cId);
     if (cIt==m_fileIdToChunkId.end())
     {
@@ -811,6 +806,19 @@ bool MSPUBParser2k::parseBorderArt(librevenge::RVNGInputStream *input, unsigned 
     if (off==0) m_collector->setShapeStretchBorderArt(borderNum);
     offsetToImage[decal[off]]=newId;
   }
+  return true;
+}
+
+bool MSPUBParser2k::parseIdList(librevenge::RVNGInputStream *input, unsigned long endPos, std::vector<unsigned> &ids)
+{
+  ListHeader2k listHeader;
+  if (!parseListHeader(input, endPos, listHeader, false) || listHeader.m_dataSize!=2)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseIdList: can not read a list\n"));
+    return false;
+  }
+  ids.reserve(size_t(listHeader.m_N));
+  for (int id=0; id<listHeader.m_N; ++id) ids.push_back(readU16(input));
   return true;
 }
 
@@ -1035,16 +1043,13 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
       return false;
     }
     input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
-    ListHeader2k listHeader;
-    if (!parseListHeader(input, chunk.end, listHeader, false) || listHeader.m_dataSize!=2)
+    std::vector<unsigned> ids;
+    if (!parseIdList(input, chunk.end, ids))
     {
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not read the group list %x\n", seqNum));
       return false;
     }
-    std::vector<unsigned> shapesList;
-    shapesList.reserve(size_t(listHeader.m_N));
-    for (int shapeId=0; shapeId<listHeader.m_N; ++shapeId) shapesList.push_back(readU16(input));
-    for (auto cId : shapesList)
+    for (auto cId : ids)
     {
       auto cIt=m_fileIdToChunkId.find(cId);
       if (cIt==m_fileIdToChunkId.end())
