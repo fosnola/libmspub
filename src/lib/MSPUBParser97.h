@@ -18,19 +18,7 @@ namespace libmspub
 {
 class MSPUBParser97 : public MSPUBParser2k
 {
-  struct TextInfo97
-  {
-    std::vector<unsigned char> m_chars;
-    std::vector<unsigned> m_paragraphEnds;
-    std::vector<unsigned> m_shapeEnds;
-    TextInfo97(const std::vector<unsigned char> &chars,
-               const std::vector<unsigned> &paragraphEnds,
-               const std::vector<unsigned> &shapeEnds)
-      : m_chars(chars), m_paragraphEnds(paragraphEnds),
-        m_shapeEnds(shapeEnds)
-    {
-    }
-  };
+  enum What { LineEnd, ShapeEnd, FieldBegin };
 
   struct SpanInfo97
   {
@@ -50,15 +38,15 @@ class MSPUBParser97 : public MSPUBParser2k
   unsigned getSecondLineOffset() const override;
   unsigned getShapeFillTypeOffset() const override;
   unsigned getShapeFillColorOffset() const override;
-  unsigned short getTextMarker() const override;
   unsigned getTextIdOffset() const override;
+  bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
+                       std::vector<CharacterStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
+  bool parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,
+                            std::vector<ParagraphStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
   CharacterStyle readCharacterStyle(librevenge::RVNGInputStream *input,
                                     unsigned length);
   void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input) override;
-  std::vector<SpanInfo97> getSpansInfo(librevenge::RVNGInputStream *input,
-                                       unsigned prop1Index, unsigned prop2Index, unsigned prop3Index,
-                                       unsigned prop3End);
-  TextInfo97 getTextInfo(librevenge::RVNGInputStream *input, unsigned length);
+  void getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType);
 public:
   MSPUBParser97(librevenge::RVNGInputStream *input, MSPUBCollector *collector);
   bool parse() override;

@@ -147,7 +147,8 @@ ColorReference MSPUBParser91::getColor(int colorId) const
     return ColorReference(0);
   }
   // 0: black, 1: white, 2: red, 3: green, blue, yellow, cyan magenta in bgr
-  unsigned const colors[]= {0x000000, 0xffffff, 0x0000ff, 0x00ff00, 0xff0000, 0x00ffff, 0xffff00, 0xc000c0};
+  // see also getColorBy2kIndex
+  unsigned const colors[]= {0x000000, 0xffffff, 0x0000ff, 0x00ff00, 0xff0000, 0x00ffff, 0xffff00, 0xff00ff};
   return ColorReference(colors[colorId]);
 }
 
@@ -309,9 +310,11 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         --pIt;
         if (pIt->first>=input->tell()-2 && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
       }
+      unsigned oldParaPos=0; // used to check for empty line
       for (unsigned p=textLimits[i]; p<textLimits[i+1]; ++p)
       {
-        auto cIt=posToSpanMap.find(input->tell());
+        auto actPos=input->tell();
+        auto cIt=posToSpanMap.find(actPos);
         if (cIt!=posToSpanMap.end())
         {
           if (!spanChars.empty())
@@ -322,7 +325,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
           if (cIt->second<spanStyles.size())
             charStyle=spanStyles[cIt->second];
         }
-        pIt=posToParaMap.find(input->tell());
+        pIt=posToParaMap.find(actPos);
         if (pIt!=posToParaMap.end())
         {
           if (!spanChars.empty())
@@ -330,30 +333,30 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
             paraSpans.push_back(TextSpan(spanChars,charStyle));
             spanChars.clear();
           }
-          if (!paraSpans.empty())
+          if (!paraSpans.empty()||(p+1!=textLimits[i+1] && oldParaPos>=actPos-3)) // 0c0d0a is an empty line
           {
             shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
             paraSpans.clear();
           }
           if (pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
+          oldParaPos=actPos;
         }
         unsigned char ch=readU8(input);
-        if (ch == 0xB) // Pub97 interprets vertical tab as nonbreaking space.
+        if (ch == 0xB) // does this exist?
         {
           spanChars.push_back('\n');
         }
-        else if (ch == 0x0D || ch==0x0A)
-        {
-          // ignore the 0x0D and advance past the 0x0A
-        }
         else if (ch == 0x0C)
         {
-          // ignore the 0x0C
+          // end of shape
+        }
+        else if (ch == 0x0D || ch==0x0A)
+        {
+          // 0d 0a end of line (but also end of paragraph
         }
         else if (ch=='#' && p+1<textLimits[i+1])
         {
           // look for page field, we do not want to change the style
-          auto actPos=input->tell();
           auto nextCh=readU8(input);
           if (nextCh==0x5)
           {
@@ -369,7 +372,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
           }
           else
           {
-            input->seek(actPos, librevenge::RVNG_SEEK_SET);
+            input->seek(actPos-1, librevenge::RVNG_SEEK_SET);
             spanChars.push_back(ch);
           }
         }

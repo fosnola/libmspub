@@ -90,8 +90,8 @@ protected:
   typedef std::vector<ContentChunkReference>::const_iterator ccr_iterator_t;
 
   MSPUBParser();
-  MSPUBParser(const MSPUBParser &);
-  MSPUBParser &operator=(const MSPUBParser &);
+  MSPUBParser(const MSPUBParser &) = delete;
+  MSPUBParser &operator=(const MSPUBParser &) = delete;
   virtual bool parseContents(librevenge::RVNGInputStream *input);
   bool parseMetaData();
   bool parseQuill(librevenge::RVNGInputStream *input);

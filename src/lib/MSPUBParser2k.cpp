@@ -48,12 +48,38 @@ private:
 
 }
 
+struct ListHeader2k
+{
+  ListHeader2k()
+    : m_dataOffset(0)
+    , m_N(0)
+    , m_maxN(0)
+    , m_dataSize(0)
+    , m_positions()
+  {
+    for (auto &v : m_values) v=0;
+  }
+  //! the data begin offset
+  unsigned m_dataOffset;
+  //! the number of data
+  int m_N;
+  //! the maximum data
+  int m_maxN;
+  //! the data size (or the last position)
+  int m_dataSize;
+  //! two unknown value
+  int m_values[2];
+  //! the position
+  std::vector<unsigned> m_positions;
+};
+
 MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector)
-  : MSPUBParser(input, collector),
-    m_imageDataChunkIndices(),
-    m_quillColorEntries(),
-    m_chunkChildIndicesById(),
-    m_chunksBeingRead()
+  : MSPUBParser(input, collector)
+  , m_imageDataChunkIndices()
+  , m_quillColorEntries()
+  , m_chunkChildIndicesById()
+  , m_chunksBeingRead()
+  , m_version(3)
 {
 }
 
@@ -476,30 +502,151 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
 {
   if (bool(m_documentChunkIndex))
   {
-    input->seek(m_contentChunks[m_documentChunkIndex.get()].offset, librevenge::RVNG_SEEK_SET);
-    input->seek(0x14, librevenge::RVNG_SEEK_CUR);
-    unsigned width = readU32(input);
-    unsigned height = readU32(input);
-    m_collector->setWidthInEmu(width);
-    m_collector->setHeightInEmu(height);
+    auto const &chunk=m_contentChunks[m_documentChunkIndex.get()];
+    ChunkHeader2k header;
+    parseChunkHeader(chunk,input,header);
+    if (header.headerLength()>=28)   // size 54|6a|b2
+    {
+      input->seek(header.m_beginOffset+0x14, librevenge::RVNG_SEEK_SET);
+      unsigned width = readU32(input);
+      unsigned height = readU32(input);
+      m_collector->setWidthInEmu(width);
+      m_collector->setHeightInEmu(height);
+    }
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseDocument: the header is too short\n"));
+    }
+    if (header.hasData())
+    {
+      input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+      ListHeader2k listHeader;
+      if (parseListHeader(input, chunk.end, listHeader, false) && listHeader.m_dataSize==2)
+      {
+        input->seek(4, librevenge::RVNG_SEEK_CUR);
+        for (int pg=2; pg<listHeader.m_N; ++pg)
+          m_collector->addPage(readU16(input));
+      }
+    }
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseDocument: can not find the page list\n"));
+    }
     return true;
   }
   return false;
 }
 
-void MSPUBParser2k::parseShapeRotation(librevenge::RVNGInputStream *input, bool isGroup, bool isLine,
-                                       unsigned seqNum, unsigned chunkOffset)
+bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition)
 {
-  input->seek(chunkOffset + 4, librevenge::RVNG_SEEK_SET);
-  // shape transforms are NOT compounded with group transforms. They are equal to what they would be
-  // if the shape were not part of a group at all. This is different from how MSPUBCollector handles rotations;
-  // we work around the issue by simply not setting the rotation of any group, thereby letting it default to zero.
-  //
-  // Furthermore, line rotations are redundant and need to be treated as zero.
-  unsigned short counterRotationInDegreeTenths = readU16(input);
-  if (!isGroup && !isLine)
+  unsigned start=input->tell();
+  if (start+10>endPos)
   {
-    m_collector->setShapeRotation(seqNum, 360. - double(counterRotationInDegreeTenths) / 10);
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: the zone seems too short\n"));
+    return false;
+  }
+  header.m_dataOffset=start+10;
+  header.m_N=readU16(input);
+  header.m_maxN=readU16(input);
+  if (!readPosition)
+    header.m_dataSize=readU16(input);
+  else
+    input->seek(2, librevenge::RVNG_SEEK_SET);
+  for (auto &v: header.m_values) v=readU16(input);
+  if ((header.m_dataSize && (endPos-header.m_dataOffset)/header.m_dataSize < unsigned(header.m_N)) ||
+      (readPosition && endPos-header.m_dataOffset<2*unsigned(header.m_N+1)))
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: problem with m_N\n"));
+    return false;
+  }
+  if (!readPosition)
+    return true;
+  header.m_positions.resize(size_t(header.m_N+1));
+  for (auto &p : header.m_positions) p=header.m_dataOffset+readU16(input);
+  return true;
+}
+
+void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, librevenge::RVNGInputStream *input,
+                                     ChunkHeader2k &header)
+{
+  auto const &chunkOffset=chunk.offset;
+  input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
+  header.m_beginOffset=chunk.offset;
+  header.m_fileType=readU16(input);
+  header.m_endOffset=chunk.end;
+  switch (header.m_fileType)
+  {
+  case 0: // old text in Contents
+  case 8: // new text in QUILL
+    m_collector->setShapeType(chunk.seqNum, RECTANGLE);
+    header.m_type=C_Text;
+    break;
+  case 2:
+    header.m_type=C_Image;
+    break;
+  case 3:
+    header.m_type=C_OLE;
+    break;
+  case 4:
+    header.m_type=C_Line;
+    header.m_flagOffset = 0x41;
+    m_collector->setShapeType(chunk.seqNum, LINE);
+    break;
+  case 5:
+    header.m_type=C_Rect;
+    m_collector->setShapeType(chunk.seqNum, RECTANGLE);
+    break;
+  case 6:
+  {
+    header.m_type=C_RectOval;
+    // changeme this make no sense
+    input->seek(chunkOffset + 0x31, librevenge::RVNG_SEEK_SET);
+    ShapeType shapeType = getShapeType(readU8(input));
+    header.m_flagOffset = 0x33;
+    if (shapeType != UNKNOWN_SHAPE)
+      m_collector->setShapeType(chunk.seqNum, shapeType);
+    break;
+  }
+  case 7:
+    header.m_type=C_Ellipse;
+    m_collector->setShapeType(chunk.seqNum, ELLIPSE);
+    break;
+  case 0xf:
+    header.m_type=C_Group;
+    break;
+  case 0x14:
+    header.m_type=C_Page;
+    break;
+  case 0x15:
+    header.m_type=C_Document;
+    break;
+  default:
+    break;
+  }
+  input->seek(chunkOffset+3, librevenge::RVNG_SEEK_SET);
+  header.m_dataOffset=chunkOffset+readU8(input);
+  if (!header.isShape() && header.m_type!=C_Group) return;
+  if (m_version>=3)
+  {
+    // shape transforms are NOT compounded with group transforms. They are equal to what they would be
+    // if the shape were not part of a group at all. This is different from how MSPUBCollector handles rotations;
+    // we work around the issue by simply not setting the rotation of any group, thereby letting it default to zero.
+    //
+    // Furthermore, line rotations are redundant and need to be treated as zero.
+    unsigned short counterRotationInDegreeTenths = readU16(input);
+    if (header.m_type!=C_Group && header.m_type!=C_Line)
+      m_collector->setShapeRotation(chunk.seqNum, 360. - double(counterRotationInDegreeTenths) / 10);
+  }
+  int xs = translateCoordinateIfNecessary(readS32(input));
+  int ys = translateCoordinateIfNecessary(readS32(input));
+  int xe = translateCoordinateIfNecessary(readS32(input));
+  int ye = translateCoordinateIfNecessary(readS32(input));
+  m_collector->setShapeCoordinatesInEmu(chunk.seqNum, xs, ys, xe, ye);
+  if (header.m_type == C_Text)
+  {
+    input->seek(chunkOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
+    unsigned txtId = readU16(input);
+    m_collector->addTextShape(txtId, chunk.seqNum);
   }
 }
 
@@ -543,28 +690,18 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
   }
   m_collector->setShapePage(chunk.seqNum, page);
   m_collector->setShapeBorderPosition(chunk.seqNum, INSIDE_SHAPE); // This appears to be the only possibility for MSPUB2k
-  bool isImage = false;
-  bool isRectangle = false;
-  bool isGroup = false;
-  bool isLine = false;
-  unsigned flagsOffset(0); // ? why was this changed from boost::optional ?
-  parseShapeType(input, chunk.seqNum, chunk.offset, isGroup, isLine, isImage, isRectangle, flagsOffset);
-  parseShapeRotation(input, isGroup, isLine, chunk.seqNum, chunk.offset);
-  parseShapeCoordinates(input, chunk.seqNum, chunk.offset);
-  parseShapeFlips(input, flagsOffset, chunk.seqNum, chunk.offset);
-  if (isGroup)
-  {
+  ChunkHeader2k header;
+  parseChunkHeader(chunk, input, header);
+  parseShapeFlips(input, header.m_flagOffset, chunk.seqNum, chunk.offset);
+  if (header.m_type==C_Group)
     return parseGroup(input, chunk.seqNum, page);
-  }
-  if (isImage)
-  {
+
+  if (header.m_type==C_Image)
     assignShapeImgIndex(chunk.seqNum);
-  }
   else
-  {
     parseShapeFill(input, chunk.seqNum, chunk.offset);
-  }
-  parseShapeLine(input, isRectangle, chunk.offset, chunk.seqNum);
+
+  parseShapeLine(input, header.isRectangle(), chunk.offset, chunk.seqNum);
   m_collector->setShapeOrder(chunk.seqNum);
   return true;
 }
@@ -631,17 +768,6 @@ void MSPUBParser2k::assignShapeImgIndex(unsigned seqNum)
   }
 }
 
-void MSPUBParser2k::parseShapeCoordinates(librevenge::RVNGInputStream *input, unsigned seqNum,
-                                          unsigned chunkOffset)
-{
-  input->seek(chunkOffset + 6, librevenge::RVNG_SEEK_SET);
-  int xs = translateCoordinateIfNecessary(readS32(input));
-  int ys = translateCoordinateIfNecessary(readS32(input));
-  int xe = translateCoordinateIfNecessary(readS32(input));
-  int ye = translateCoordinateIfNecessary(readS32(input));
-  m_collector->setShapeCoordinatesInEmu(seqNum, xs, ys, xe, ye);
-}
-
 int MSPUBParser2k::translateCoordinateIfNecessary(int coordinate) const
 {
   return coordinate;
@@ -660,66 +786,9 @@ void MSPUBParser2k::parseShapeFlips(librevenge::RVNGInputStream *input, unsigned
   }
 }
 
-void MSPUBParser2k::parseShapeType(librevenge::RVNGInputStream *input,
-                                   unsigned seqNum, unsigned chunkOffset,
-                                   bool &isGroup, bool &isLine, bool &isImage, bool &isRectangle,
-                                   unsigned &flagsOffset)
-{
-  input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
-  unsigned short typeMarker = readU16(input);
-  if (typeMarker == 0x000f)
-  {
-    isGroup = true;
-  }
-  else if (typeMarker == 0x0004)
-  {
-    isLine = true;
-    flagsOffset = 0x41;
-    m_collector->setShapeType(seqNum, LINE);
-  }
-  else if (typeMarker == 0x0002)
-  {
-    isImage = true;
-    m_collector->setShapeType(seqNum, RECTANGLE);
-    isRectangle = true;
-  }
-  else if (typeMarker == 0x0005)
-  {
-    m_collector->setShapeType(seqNum, RECTANGLE);
-    isRectangle = true;
-  }
-  else if (typeMarker == 0x0006)
-  {
-    input->seek(chunkOffset + 0x31, librevenge::RVNG_SEEK_SET);
-    ShapeType shapeType = getShapeType(readU8(input));
-    flagsOffset = 0x33;
-    if (shapeType != UNKNOWN_SHAPE)
-    {
-      m_collector->setShapeType(seqNum, shapeType);
-    }
-  }
-  else if (typeMarker == 0x0007)
-  {
-    m_collector->setShapeType(seqNum, ELLIPSE);
-  }
-  else if (typeMarker == getTextMarker())
-  {
-    m_collector->setShapeType(seqNum, RECTANGLE);
-    isRectangle = true;
-    input->seek(chunkOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
-    unsigned txtId = readU16(input);
-    m_collector->addTextShape(txtId, seqNum);
-  }
-}
-
 unsigned MSPUBParser2k::getTextIdOffset() const
 {
   return 0x58;
-}
-
-unsigned short MSPUBParser2k::getTextMarker() const
-{
-  return 0x0008;
 }
 
 unsigned MSPUBParser2k::getFirstLineOffset() const
@@ -799,6 +868,7 @@ bool MSPUBParser2k::parse()
 
 PageType MSPUBParser2k::getPageTypeBySeqNum(unsigned seqNum)
 {
+  // changeme this make no sense....
   switch (seqNum)
   {
   case 0x116:
