@@ -156,12 +156,14 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     parseSpanStyles(input, id, spanStyles, posToSpanMap);
   std::vector<ParagraphStyle> paraStyles;
   std::map<unsigned, unsigned> posToParaMap;
+  std::vector<CellStyle> cellStyles;
+  std::map<unsigned, unsigned> posToCellMap;
   if (m_version<=3)
   {
     for (unsigned id=index[1]; id<index[2]; ++id)
       parseParagraphStyles(input, id, paraStyles, posToParaMap);
-    //for (unsigned id=index[2]; id<index[3]; ++id)
-    //  parseCellStyles(input, id, paraStyles, posToParaMap);
+    for (unsigned id=index[2]; id<index[3]; ++id)
+      parseCellStyles(input, id, cellStyles, posToCellMap);
   }
 
   input->seek(textStart, librevenge::RVNG_SEEK_SET);
@@ -180,6 +182,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
 
   size_t oldParaPos=0; // used to check for empty line
   size_t actChar=0;
+  std::vector<CellStyle> cellStyleList;
   for (unsigned c=0; c<length; ++c)
   {
     // change of style
@@ -220,6 +223,14 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       }
       if (pIt!=posToParaMap.end() && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
       oldParaPos=unsigned(actPos);
+    }
+    auto cellIt=posToCellMap.find((unsigned) actPos);
+    if (cellIt!=posToCellMap.end())
+    {
+      if (cellIt->second<=cellStyles.size())
+        cellStyleList.push_back(cellStyles[cellIt->second]);
+      else
+        cellStyleList.push_back(CellStyle());
     }
     unsigned char ch=readU8(input);
     // special character
@@ -286,9 +297,12 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
           m_collector->setTableCellTextEnds(shape,cellEnds);
           cellEnds.clear();
         }
+        if (cellStyleList.size()>1)
+          m_collector->setTableCellTextStyles(shape, cellStyleList);
         m_collector->addTextString(shapeParas, shape++);
         charStyle=CharacterStyle();
         shapeParas.clear();
+        cellStyleList.clear();
         actChar=0;
       }
       continue;
@@ -324,8 +338,127 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   {
     if (!cellEnds.empty())
       m_collector->setTableCellTextEnds(shape,cellEnds);
+    if (cellStyleList.size()>1)
+      m_collector->setTableCellTextStyles(shape, cellStyleList);
     m_collector->addTextString(shapeParas, shape++);
   }
+}
+
+bool MSPUBParser97::parseCellStyles(librevenge::RVNGInputStream *input, unsigned index,
+                                    std::vector<CellStyle> &styles,
+                                    std::map<unsigned, unsigned> &posToStyle)
+{
+  if (input->seek((index+1)*0x200-1, librevenge::RVNG_SEEK_SET)!=0)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser91::parseCellStyles: can not use index=%x\n", index));
+    return false;
+  }
+  unsigned N=unsigned(readU8(input));
+  if ((N+1)*5>0x200)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseCellStyles: N value=%d is too big for index=%x\n", N, index));
+    return false;
+  }
+  input->seek(index*0x200, librevenge::RVNG_SEEK_SET);
+  std::vector<unsigned> positions;
+  positions.resize(N+1);
+  for (auto &p : positions) p=readU32(input);
+  std::vector<uint8_t> stylePos;
+  stylePos.reserve(N);
+  for (unsigned i=0; i<N; ++i) stylePos.push_back(readU8(input));
+  if (styles.empty())
+    styles.push_back(CellStyle());
+  std::map<unsigned, unsigned> offsetToStyleMap;
+  offsetToStyleMap[0]=0;
+  for (unsigned i=0; i<N; ++i)
+  {
+    auto const &offs=stylePos[i];
+    auto oIt=offsetToStyleMap.find(offs);
+    if (oIt!=offsetToStyleMap.end())
+    {
+      posToStyle[positions[i]]=oIt->second;
+      continue;
+    }
+    long begPos=index*0x200+2*offs;
+    input->seek(begPos, librevenge::RVNG_SEEK_SET);
+    uint8_t len=readU8(input);
+    if (len==0 || 2*offs+1+len>0x200)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser97::parseCellStyles: can not read len for i=%x for index=%x\n", i, index));
+      posToStyle[positions[i]]=0;
+      continue;
+    }
+    auto endPos=begPos+1+len;
+    unsigned newId=unsigned(styles.size());
+    posToStyle[positions[i]]=newId;
+    offsetToStyleMap[offs]=newId;
+    styles.push_back(CellStyle());
+    auto &style=styles.back();
+    input->seek(2, librevenge::RVNG_SEEK_CUR);
+    // the surface color
+    unsigned bgColors[2];
+    bool ok=true;
+    for (int j=0; j<2; ++j)
+    {
+      if (input->tell()+(m_version==2 ? 1 : 4)>endPos)
+      {
+        ok=false;
+        break;
+      }
+      bgColors[j]=m_version<=2 ? readU8(input) : readU32(input);
+    }
+    if (!ok || input->tell()>=endPos) continue;
+    int patternId=int(readU8(input));
+    unsigned bgRefColors[2];
+    for (int j=0; j<2; ++j) bgRefColors[j]=translate2kColorReference(bgColors[j]);
+    if (patternId==1 || patternId==2)
+      style.m_color=ColorReference(bgRefColors[2-patternId]);
+    else if (patternId)
+    {
+      double percent=-1;
+      if (patternId&0x80) // gradient, create medium color
+        percent=0.5;
+      else if (patternId>=3 && patternId<=24)
+      {
+        double const percents[]= {0.5, 0.5, 0.25, 0.125,
+                                  0.0625, 0.03125, 0.5, 0.43,
+                                  0.375, 0.25, 0.25, 025,
+                                  0.5, 0.5, 0.5, 0.25,
+                                  0.5, 0.094, 0.43, 0.125,
+                                  0.32
+                                 };
+        percent=percents[patternId-3];
+      }
+      else
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: unknown pattern=%d\n", patternId));
+      }
+      if (percent>0)
+      {
+        unsigned finalColor=0, depl=0;
+        for (int c=0; c<3; ++c, depl+=8)
+        {
+          finalColor|=unsigned(percent*double((bgRefColors[1]>>depl)&0xff)+
+                               (1-percent)*double((bgRefColors[0]>>depl)&0xff))<<depl;
+        }
+        style.m_color=ColorReference(finalColor);
+      }
+    }
+    input->seek(m_version==2 ? 9 : 8, librevenge::RVNG_SEEK_CUR); // margins + unknown
+    // the border
+    for (int b=0; b<4; ++b)
+    {
+      if (m_version>=3) input->seek(1, librevenge::RVNG_SEEK_CUR); // type
+      if (input->tell()>=endPos) break;
+      auto w=readU8(input);
+      double width=(w&0x80) ? double(w&0x7f)/4 : double(w);
+      unsigned color=0;
+      if (input->tell()+(m_version==2 ? 1 : 4)<=endPos)
+        color=m_version==2 ? readU8(input) : readU32(input);
+      style.m_borders.push_back(Line(ColorReference(translate2kColorReference(color)), unsigned(width*12700), width>0));
+    }
+  }
+  return true;
 }
 
 bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,

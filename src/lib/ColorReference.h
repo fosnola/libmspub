@@ -16,6 +16,7 @@
 
 namespace libmspub
 {
+struct Color;
 class ColorReference
 {
   unsigned m_baseColor;

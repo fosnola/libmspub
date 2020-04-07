@@ -479,7 +479,7 @@ MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter) :
   m_shapeInfosBySeqNum(), m_masterPages(),
   m_shapesWithCoordinatesRotated90(),
   m_masterPagesByPageSeqNum(),
-  m_tableCellTextEndsByTextId(), m_stringOffsetsByTextId(),
+  m_tableCellTextEndsByTextId(), m_stringOffsetsByTextId(), m_tableCellStylesByTextId(),
   m_calculationValuesSeen(), m_pageSeqNumsOrdered(),
   m_encodingHeuristic(false), m_allText(),
   m_calculatedEncoding(),
@@ -498,6 +498,11 @@ void MSPUBCollector::setTableCellTextEnds(
   const unsigned textId, const std::vector<unsigned> &ends)
 {
   m_tableCellTextEndsByTextId[textId] = ends;
+}
+
+void MSPUBCollector::setTableCellTextStyles(unsigned textId, const std::vector<CellStyle> &styles)
+{
+  m_tableCellStylesByTextId[textId] = styles;
 }
 
 void MSPUBCollector::useEncodingHeuristic()
@@ -944,6 +949,15 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       ParagraphTexts_t paraTexts;
       mapTableTextToCells(text, tableCellTextEnds, getCalculatedEncoding(), paraToCellMap, paraTexts);
 
+      unsigned numStyles=0;
+      std::vector<CellStyle> const *styles=nullptr;
+      auto const &stylesIt=m_tableCellStylesByTextId.find(get(info.m_textId));
+      if (stylesIt!=m_tableCellStylesByTextId.end())
+      {
+        styles=&stylesIt->second;
+        numStyles=unsigned(styles->size());
+      }
+      unsigned cell=0;
       for (unsigned row = 0; row != tableLayout.shape()[0]; ++row)
       {
         librevenge::RVNGPropertyList rowProps;
@@ -956,6 +970,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
           librevenge::RVNGPropertyList cellProps;
           cellProps.insert("librevenge:column", int(col));
           cellProps.insert("librevenge:row", int(row));
+          if (cell<numStyles)(*styles)[cell++].addTo(cellProps, m_paletteColors);
 
           if (isCovered(tableLayout[row][col]))
           {

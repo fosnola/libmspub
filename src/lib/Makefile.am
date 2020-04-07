@@ -64,6 +64,7 @@ libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_SOURCES = \
 	ShapeInfo.h \
 	ShapeType.h \
 	Shapes.h \
+	TableInfo.cpp \
 	TableInfo.h \
 	VectorTransformation2D.cpp \
 	VectorTransformation2D.h \

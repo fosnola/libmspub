@@ -12,6 +12,11 @@
 
 #include <vector>
 
+#include <librevenge/librevenge.h>
+
+#include "ColorReference.h"
+#include "Line.h"
+
 namespace libmspub
 {
 
@@ -29,6 +34,14 @@ struct CellInfo
   unsigned m_endRow;
   unsigned m_startColumn;
   unsigned m_endColumn;
+};
+
+struct CellStyle
+{
+  std::vector<Line> m_borders;
+  boost::optional<ColorReference> m_color;
+  /** add the style to cell properties (if possible) */
+  void addTo(librevenge::RVNGPropertyList &propList, std::vector<Color> const &palette) const;
 };
 
 struct TableInfo

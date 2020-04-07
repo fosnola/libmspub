@@ -204,6 +204,7 @@ struct ParagraphStyle
   {
   }
 };
+
 //! a field
 struct Field
 {

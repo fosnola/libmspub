@@ -5939,7 +5939,7 @@ struct LineInfo
   double m_width;
   librevenge::RVNGString m_color;
   bool m_lineExists;
-  LineInfo(librevenge::RVNGPropertyListVector vertices, Line current, std::vector<Color> palette) : m_vertices(vertices),
+  LineInfo(librevenge::RVNGPropertyListVector vertices, Line current, std::vector<Color> const &palette) : m_vertices(vertices),
     m_width((double)(current.m_widthInEmu) / EMUS_IN_INCH),
     m_color(MSPUBCollector::getColorString(current.m_color.getFinalColor(palette))),
     m_lineExists(current.m_lineExists) { }

@@ -39,6 +39,7 @@ struct Coordinate;
 struct Dash;
 struct Line;
 struct Shadow;
+struct CellStyle;
 struct TableInfo;
 
 struct TextLineState;
@@ -126,6 +127,7 @@ public:
   void useEncodingHeuristic();
 
   void setTableCellTextEnds(unsigned textId, const std::vector<unsigned> &ends);
+  void setTableCellTextStyles(unsigned textId, const std::vector<CellStyle> &styles);
   void setTextStringOffset(unsigned textId, unsigned offset);
 
   bool go();
@@ -174,6 +176,7 @@ private:
   std::map<unsigned, unsigned> m_masterPagesByPageSeqNum;
   std::map<unsigned, std::vector<unsigned> > m_tableCellTextEndsByTextId;
   std::map<unsigned, unsigned> m_stringOffsetsByTextId;
+  std::map<unsigned, std::vector<CellStyle> > m_tableCellStylesByTextId;
   mutable std::vector<bool> m_calculationValuesSeen;
   std::vector<unsigned> m_pageSeqNumsOrdered;
   bool m_encodingHeuristic;
