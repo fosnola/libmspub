@@ -14,6 +14,7 @@
 #include "MSPUBCollector.h"
 #include "MSPUBParser.h"
 #include "MSPUBParser2k.h"
+#include "MSPUBParser91.h"
 #include "MSPUBParser97.h"
 #include "libmspub_utils.h"
 
@@ -26,6 +27,7 @@ namespace
 enum MSPUBVersion
 {
   MSPUB_UNKNOWN_VERSION = 0,
+  MSPUB_1,
   MSPUB_2K,
   MSPUB_2K2
 };
@@ -35,7 +37,12 @@ MSPUBVersion getVersion(librevenge::RVNGInputStream *input)
   try
   {
     if (!input->isStructured())
-      return MSPUB_UNKNOWN_VERSION;
+    {
+      input->seek(0, librevenge::RVNG_SEEK_SET);
+      if (0xe7 != readU8(input) || 0xac != readU8(input))
+        return MSPUB_UNKNOWN_VERSION;
+      return MSPUB_1;
+    }
 
     std::unique_ptr<librevenge::RVNGInputStream> contentsStream(input->getSubStreamByName("Contents"));
     if (!contentsStream)
@@ -100,6 +107,10 @@ PUBAPI bool MSPUBDocument::isSupported(librevenge::RVNGInputStream *input)
       if (!quillStream)
         return false;
     }
+#ifndef DEBUG
+    if (version == MSPUB_1)
+      return false;
+#endif
     return true;
   }
   catch (...)
@@ -128,6 +139,13 @@ PUBAPI bool MSPUBDocument::parse(librevenge::RVNGInputStream *input, librevenge:
     std::unique_ptr<MSPUBParser> parser;
     switch (getVersion(input))
     {
+    case MSPUB_1:
+#ifdef DEBUG
+      parser.reset(new MSPUBParser91(input, &collector));
+      break;
+#else
+      return false;
+#endif
     case MSPUB_2K:
     {
       std::unique_ptr<librevenge::RVNGInputStream> quillStream(input->getSubStreamByName("Quill/QuillSub/CONTENTS"));

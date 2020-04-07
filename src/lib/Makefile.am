@@ -41,6 +41,8 @@ libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_SOURCES = \
 	MSPUBParser.h \
 	MSPUBParser2k.cpp \
 	MSPUBParser2k.h \
+	MSPUBParser91.cpp \
+	MSPUBParser91.h \
 	MSPUBParser97.cpp \
 	MSPUBParser97.h \
 	MSPUBTypes.h \
