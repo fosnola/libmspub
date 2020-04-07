@@ -27,7 +27,7 @@ class MSPUBParser2k : public MSPUBParser
 public:
   enum ChunkType2k
   {
-    C_Text /* 0 or 8*/, C_Image, C_OLE, C_Line, C_Rect, C_RectOval, C_Ellipse,
+    C_Text /* 0 or 8*/, C_Image, C_OLE, C_Line, C_Rect, C_StandartShape, C_Ellipse,
     C_Group, C_Document, C_Page, C_Unknown
   };
   struct ChunkHeader2k
@@ -43,11 +43,11 @@ public:
     }
     bool isRectangle() const
     {
-      return m_type==C_Text || m_type==C_Image || m_type==C_OLE || m_type==C_Rect || m_type==C_RectOval;
+      return m_type==C_Text || m_type==C_Image || m_type==C_OLE || m_type==C_Rect;
     }
     bool isShape() const
     {
-      return isRectangle() || m_type==C_Line;
+      return isRectangle() || m_type==C_Line || m_type==C_StandartShape;
     }
     unsigned headerLength() const
     {
@@ -65,8 +65,8 @@ public:
     unsigned m_flagOffset; // removeme
   };
 private:
-  static ShapeType getShapeType(unsigned char shapeSpecifier);
   std::vector<unsigned> m_imageDataChunkIndices;
+  std::vector<unsigned> m_oleDataChunkIndices;
   std::vector<unsigned> m_quillColorEntries;
   std::map<unsigned, std::vector<unsigned> > m_chunkChildIndicesById;
   std::deque<unsigned> m_chunksBeingRead;
@@ -76,6 +76,7 @@ protected:
   bool m_isBanner;
 
   // helper functions
+  static ShapeType getShapeType(unsigned char shapeSpecifier);
   bool parse2kShapeChunk(ContentChunkReference const &chunk, librevenge::RVNGInputStream *input,
                          boost::optional<unsigned> pageSeqNum = boost::optional<unsigned>(),
                          bool topLevelCall = true);

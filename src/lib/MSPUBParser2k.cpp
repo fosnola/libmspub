@@ -417,10 +417,20 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
       break;
+    case 0x0003:
+      MSPUB_DEBUG_MSG(("Found ole chunk of id 0x%x and parent 0x%x\n", id, parent));
+      m_contentChunks.push_back(ContentChunkReference(OLE_2K, chunkOffset, 0, id, parent));
+      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      break;
     case 0x0021:
       MSPUB_DEBUG_MSG(("Found image_2k_data chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K_DATA, chunkOffset, 0, id, parent));
       m_imageDataChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      break;
+    case 0x0022:
+      MSPUB_DEBUG_MSG(("Found ole_2k_data chunk of id 0x%x and parent 0x%x\n", id, parent));
+      m_contentChunks.push_back(ContentChunkReference(OLE_2K_DATA, chunkOffset, 0, id, parent));
+      m_oleDataChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
       break;
     case 0x0000:
     case 0x0004:
@@ -699,16 +709,9 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
     m_collector->setShapeType(chunk.seqNum, RECTANGLE);
     break;
   case 6:
-  {
-    header.m_type=C_RectOval;
-    // changeme this make no sense
-    input->seek(chunkOffset + 0x31, librevenge::RVNG_SEEK_SET);
-    ShapeType shapeType = getShapeType(readU8(input));
+    header.m_type=C_StandartShape;
     header.m_flagOffset = 0x33;
-    if (shapeType != UNKNOWN_SHAPE)
-      m_collector->setShapeType(chunk.seqNum, shapeType);
     break;
-  }
   case 7:
     header.m_type=C_Ellipse;
     m_collector->setShapeType(chunk.seqNum, ELLIPSE);
@@ -735,7 +738,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 {
   if (find(m_chunksBeingRead.begin(), m_chunksBeingRead.end(), chunk.seqNum) != m_chunksBeingRead.end())
   {
-    MSPUB_DEBUG_MSG(("chunk %u is nested in itself", chunk.seqNum));
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parse2kShapeChunk: chunk %u is nested in itself\n", chunk.seqNum));
     return false;
   }
   const ChunkNestingGuard guard(m_chunksBeingRead, chunk.seqNum);
@@ -807,7 +810,16 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
                                      ChunkHeader2k const &header)
 {
   parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
-  if (header.m_type!=C_Image)
+  if (header.m_type==C_Group) // checkme
+    return;
+  if (header.m_type==C_StandartShape)
+  {
+    input->seek(header.m_beginOffset + 0x31, librevenge::RVNG_SEEK_SET);
+    ShapeType shapeType = getShapeType(readU8(input));
+    if (shapeType != UNKNOWN_SHAPE)
+      m_collector->setShapeType(seqNum, shapeType);
+  }
+  else if (header.m_type!=C_Image)
     parseShapeFill(input, seqNum, header.m_beginOffset);
   parseShapeLine(input, header.isRectangle(), header.m_beginOffset, seqNum);
 }
@@ -847,10 +859,10 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
     for (unsigned int chunkChildIndex : chunkChildIndices)
     {
       const ContentChunkReference &childChunk = m_contentChunks.at(chunkChildIndex);
-      if (childChunk.type == SHAPE || childChunk.type == GROUP)
-      {
+      if (childChunk.type == SHAPE)
         retVal = retVal && parse2kShapeChunk(childChunk, input, page, false);
-      }
+      else if (childChunk.type == GROUP)
+        retVal = retVal && parseGroup(input, chunkChildIndex, page);
     }
   }
   m_collector->endGroup();

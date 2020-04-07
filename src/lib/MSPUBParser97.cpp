@@ -500,6 +500,8 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   if (m_version>2)
     return MSPUBParser2k::parseShapeFormat(input, seqNum, header);
 
+  if (header.m_type==C_Group)
+    return;
   if (input->tell()+9>header.m_dataOffset)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: the zone is too small\n"));
@@ -529,6 +531,12 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
     }
   }
+  else if (header.m_type==C_StandartShape)
+  {
+    ShapeType shapeType = getShapeType(readU8(input));
+    if (shapeType != UNKNOWN_SHAPE)
+      m_collector->setShapeType(seqNum, shapeType);
+  }
   else if (header.m_type==C_Line)
   {
     input->seek(16, librevenge::RVNG_SEEK_CUR);
@@ -537,7 +545,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       m_collector->setShapeFlip(seqNum, true, false);
     if (flags&0x6)
     {
-      Arrow const arrows[]=
+      static Arrow const arrows[]=
       {
         Arrow(NO_ARROW, MEDIUM, LARGE),
         Arrow(TRIANGLE_ARROW, MEDIUM, LARGE),
@@ -565,7 +573,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       int begArrow=((flags>>4)&0x1f);
       if (begArrow>=numArrows) begArrow=1;
       int endArrow=((flags>>9)&0x1f);
-      if (endArrow>=numArrows) endArrow=1;
+      if (endArrow>=numArrows) endArrow=0;
       if (flags&0x2)
       {
         m_collector->setShapeEndArrow(seqNum, arrows[begArrow]);

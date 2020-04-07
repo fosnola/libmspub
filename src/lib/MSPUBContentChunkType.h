@@ -27,7 +27,9 @@ enum MSPUBContentChunkType //Please fill this in and replace magic constants in 
   CELLS      = 0x63,
   FONT       = 0x6C,
   IMAGE_2K, //these don't exist in Pub 2k3 so their value in the enum is not used.
-  IMAGE_2K_DATA
+  IMAGE_2K_DATA,
+  OLE_2K,
+  OLE_2K_DATA
 };
 } // namespace libmspub
 
