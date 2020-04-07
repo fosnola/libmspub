@@ -199,13 +199,12 @@ void createTableLayout(const std::vector<CellInfo> &cells, TableLayout &tableLay
 }
 
 typedef std::vector<std::pair<unsigned, unsigned> > ParagraphToCellMap_t;
-typedef std::vector<librevenge::RVNGString> SpanTexts_t;
+typedef std::vector<std::vector<unsigned char> > SpanTexts_t;
 typedef std::vector<SpanTexts_t> ParagraphTexts_t;
 
 void mapTableTextToCells(
   const std::vector<TextParagraph> &text,
   const std::vector<unsigned> &tableCellTextEnds,
-  const char *const encoding,
   ParagraphToCellMap_t &paraToCellMap,
   ParagraphTexts_t &paraTexts
 )
@@ -225,12 +224,18 @@ void mapTableTextToCells(
 
     for (unsigned i_spans = 0; i_spans != text[para].spans.size(); ++i_spans)
     {
-      librevenge::RVNGString textString;
-      appendCharacters(textString, text[para].spans[i_spans].chars, encoding);
-      offset += unsigned(textString.len());
+      auto textString=text[para].spans[i_spans].chars;
+      offset += unsigned(textString.size());
       // TODO: why do we not drop these during parse already?
-      if ((i_spans == text[para].spans.size() - 1) && (textString == "\r"))
-        continue;
+      if (i_spans == text[para].spans.size() - 1)
+      {
+        auto len=textString.size();
+        if (len>=2 && textString.back() == 0 && textString[len-2]=='\r') // UTF16LE
+          textString.resize(len-2);
+        else if (len && textString.back() == '\r')
+          textString.pop_back();
+        if (textString.empty() && !text[para].spans[i_spans].field) continue;
+      }
       paraTexts.back().push_back(textString);
     }
 
@@ -1088,8 +1093,7 @@ void MSPUBCollector::paintTable(const ShapeInfo &info, std::vector<TextParagraph
 
   ParagraphToCellMap_t paraToCellMap;
   ParagraphTexts_t paraTexts;
-  // change me use the font index to find the encoding
-  mapTableTextToCells(text, tableCellTextEnds, getCalculatedEncoding(), paraToCellMap, paraTexts);
+  mapTableTextToCells(text, tableCellTextEnds, paraToCellMap, paraTexts);
 
   unsigned numStyles=0;
   std::vector<CellStyle> const *styles=nullptr;
@@ -1153,9 +1157,12 @@ void MSPUBCollector::paintTable(const ShapeInfo &info, std::vector<TextParagraph
                 continue;
               }
 
+              librevenge::RVNGString textString;
+              if (!paraTexts[para][i_spans].empty())
+                appendCharacters(textString, paraTexts[para][i_spans], getCalculatedEncoding(text[para].spans[i_spans].style.fontIndex));
               if (i_spans==0 && hasDropStyle)
               {
-                auto normalString=paintDropCap(paraTexts[para][i_spans], charProps, *paraStyle.m_dropCapStyle);
+                auto normalString=paintDropCap(textString, charProps, *paraStyle.m_dropCapStyle);
                 m_painter->openSpan(charProps);
                 separateSpacesAndInsertText(m_painter, normalString);
                 m_painter->closeSpan();
@@ -1163,7 +1170,7 @@ void MSPUBCollector::paintTable(const ShapeInfo &info, std::vector<TextParagraph
               else
               {
                 m_painter->openSpan(charProps);
-                separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
+                separateSpacesAndInsertText(m_painter, textString);
                 m_painter->closeSpan();
               }
             }
