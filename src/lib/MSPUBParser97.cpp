@@ -567,13 +567,12 @@ unsigned MSPUBParser97::getShapeFillColorOffset() const
 void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
-  //if (m_version>2 && (m_version!=3 || (header.m_type==C_Line||header.m_type==C_Table || header.m_type==C_Text)))
-  if (m_version>2 && (m_version!=3 || header.m_type==C_Table))
+  if (m_version>3)
     return MSPUBParser2k::parseShapeFormat(input, seqNum, header);
 
   if (header.m_type==C_Group)
     return;
-  if (input->tell()+9>header.m_dataOffset)
+  if (input->tell()+(m_version==2 ? 9 : 19)>header.m_dataOffset)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: the zone is too small\n"));
     return;
@@ -600,7 +599,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   }
   input->seek(2,librevenge::RVNG_SEEK_CUR); // 0
   int borderId=0xfffe; // none
-  if (header.isRectangle())
+  if (header.isRectangle() && input->tell()+(m_version==2 ? 9 : 21)<=header.m_dataOffset)
   {
     borderId=int(readU16(input));
     input->seek(1,librevenge::RVNG_SEEK_CUR); // a width
@@ -624,19 +623,21 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
         bColors[j]=readU32(input);
       }
     }
-    if (header.m_type == C_Text)
+    if (header.m_type == C_Text && input->tell()+10<=header.m_dataOffset)
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       unsigned txtId = readU16(input);
       m_collector->addTextShape(txtId, seqNum);
     }
-    else if (header.m_type == C_Table)
+    else if (header.m_type == C_Table && input->tell()+(m_version==2 ? 24 : 32)<=header.m_dataOffset)
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       m_collector->addTextShape(readU16(input), seqNum);
       input->seek(2, librevenge::RVNG_SEEK_CUR); // data size ?
       unsigned numCols = readU16(input);
+      if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
       unsigned numRows = readU16(input);
+      if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
       unsigned width=readU32(input);
       unsigned height=readU32(input);
       if (numRows && numCols)
@@ -661,7 +662,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       }
     }
   }
-  else if (header.m_type==C_CustomShape)
+  else if (header.m_type==C_CustomShape && input->tell()+12<=header.m_dataOffset)
   {
     ShapeType shapeType = getShapeType((unsigned char)readU16(input));
     if (shapeType != UNKNOWN_SHAPE)
@@ -677,7 +678,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       m_collector->setAdjustValue(seqNum, i, readS16(input));
     */
   }
-  else if (header.m_type==C_Line)
+  else if (header.m_type==C_Line && input->tell()+18<=header.m_dataOffset)
   {
     input->seek(16, librevenge::RVNG_SEEK_CUR);
     auto flags=readU16(input);
