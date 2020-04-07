@@ -89,12 +89,6 @@ Color MSPUBParser2k::getColorBy2kHex(unsigned hex)
   }
 }
 
-ColorReference MSPUBParser2k::getColorReferenceBy2kIndex(unsigned char index)
-{
-  Color col=getColorBy2kIndex(index);
-  return ColorReference(unsigned(col.r | (col.g<<8) | (col.b<<16)));
-}
-
 Color MSPUBParser2k::getColorBy2kIndex(unsigned char index)
 {
   switch (index)
@@ -270,6 +264,18 @@ unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k) const
   }
 }
 
+ColorReference MSPUBParser2k::getColorReferenceByIndex(unsigned ref2k) const
+{
+  unsigned baseColor=translate2kColorReference(ref2k);
+  if (m_version==5 && (ref2k&0xff000000)==0xc0000000) // changeme probably also try in v2k
+  {
+    unsigned mod=(ref2k>>16)&0xff;
+    unsigned modifiedColor=(0x10<<24)|((mod>0x7f ? mod-0x7f : mod)<<17)|unsigned((mod>0x70? 2 : 1)<<8);
+    return ColorReference(baseColor,modifiedColor);
+  }
+  return ColorReference(baseColor);
+}
+
 //FIXME: Valek found different values; what does this depend on?
 ShapeType MSPUBParser2k::getShapeType(unsigned char shapeSpecifier)
 {
@@ -363,7 +369,7 @@ void MSPUBParser2k::parseTextInfos(const ContentChunkReference &, librevenge::RV
 {
 }
 
-void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream */*input*/, unsigned seqNum, ChunkHeader2k const &/*header*/,
+void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
                                        unsigned, unsigned numCols, unsigned numRows, unsigned width, unsigned height)
 {
   if (!numRows || !numCols || numRows>128 || numCols>128)
@@ -372,11 +378,38 @@ void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream */*input*/, u
     return;
   }
   TableInfo ti(numRows, numCols);
+  if (header.hasData())
+  {
+    input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+    ListHeader2k listHeader;
+    if (!parseListHeader(input, header.m_endOffset, listHeader, false) || listHeader.m_dataSize!=8 || listHeader.m_N<numCols+numRows)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseTableInfoData: can not read the data zone\n"));
+    }
+    else
+    {
+      for (int wh=0; wh<2; ++wh)
+      {
+        unsigned num=wh==0 ? numCols : numRows;
+        std::vector<unsigned> &sizes=wh==0 ? ti.m_columnWidthsInEmu : ti.m_rowHeightsInEmu;
+        sizes.reserve(size_t(num));
+        for (unsigned i=0; i<num; ++i)
+        {
+          input->seek(4, librevenge::RVNG_SEEK_CUR); // cumulated size
+          sizes.push_back(readU32(input));
+        }
+      }
+    }
+  }
+  else
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseTableInfoData: can not find the data zone\n"));
+  }
   // just in case we have no read all row/columns
   ti.m_rowHeightsInEmu.resize(size_t(numRows),height/numRows);
   ti.m_columnWidthsInEmu.resize(size_t(numCols),width/numCols);
 
-  CellStyle const *cellStylesPtr=nullptr;
+  // TODO find the overriden/diagonal cell...
   for (unsigned r=0; r<numRows; r++)
   {
     CellInfo cellInfo;
@@ -384,14 +417,6 @@ void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream */*input*/, u
     for (unsigned c=0; c<numCols; c++)
     {
       cellInfo.m_startColumn=cellInfo.m_endColumn=c;
-      if (cellStylesPtr && ((cellStylesPtr++->m_flags)&1))
-      {
-        while (c<numCols && cellStylesPtr->m_flags&4)
-        {
-          cellInfo.m_endColumn=++c;
-          ++cellStylesPtr;
-        }
-      }
       ti.m_cells.push_back(cellInfo);
     }
   }
@@ -1286,12 +1311,12 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     for (int i=0; i<numBorders; ++i)
     {
       int wh=i+1 < numBorders ? i+1 : 0;
-      m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[wh])), unsigned(widths[wh]*12700), widths[wh]>0));
+      m_collector->addShapeLine(seqNum, Line(getColorReferenceByIndex(bColors[wh]), unsigned(widths[wh]*12700), widths[wh]>0));
     }
   }
   else if (widths[0]>0)
   {
-    m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[0])), unsigned(widths[0]*12700), true));
+    m_collector->addShapeLine(seqNum, Line(getColorReferenceByIndex(bColors[0]), unsigned(widths[0]*12700), true));
     m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
     m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
   }
@@ -1365,8 +1390,8 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     {
       auto const &data=gradients[patternId];
       auto gradient=std::make_shared<GradientFill>(m_collector, data.m_style, data.m_angle, data.m_cx, data.m_cy);
-      gradient->addColor(ColorReference(translate2kColorReference(colors[data.m_swapColor ? 1 : 0])), 0, 1);
-      gradient->addColor(ColorReference(translate2kColorReference(colors[data.m_swapColor ? 0 : 1])), 1, 1);
+      gradient->addColor(getColorReferenceByIndex(colors[data.m_swapColor ? 1 : 0]), 0, 1);
+      gradient->addColor(getColorReferenceByIndex(colors[data.m_swapColor ? 0 : 1]), 1, 1);
       m_collector->setShapeFill(seqNum, gradient, false);
     }
     else
@@ -1377,7 +1402,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   else if (patternId)
   {
     if (patternId==1 || patternId==2)
-      m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(ColorReference(translate2kColorReference(colors[2-patternId])), 1, m_collector), false);
+      m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(getColorReferenceByIndex(colors[2-patternId]), 1, m_collector), false);
     else if (patternId>=3 && patternId<=24)
     {
       uint8_t const patterns[]=
@@ -1407,8 +1432,8 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
 
       m_collector->setShapeFill(seqNum, std::make_shared<Pattern88Fill>
                                 (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),
-                                 ColorReference(translate2kColorReference(colors[1])),
-                                 ColorReference(translate2kColorReference(colors[0]))), false);
+                                 getColorReferenceByIndex(colors[1]),
+                                 getColorReferenceByIndex(colors[0])), false);
     }
     else
     {
