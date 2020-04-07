@@ -1021,7 +1021,7 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
   if (cellStyles && cellStyles->size()!=numRows*numCols)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: oops, the cell styles size seems bad\n"));
-    cellStyles=0;
+    cellStyles=nullptr;
   }
   auto const *cellStylesPtr=cellStyles ? cellStyles->data() : nullptr;
   for (unsigned r=0; r<numRows; r++)
@@ -1031,7 +1031,7 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
     for (unsigned c=0; c<numCols; c++)
     {
       cellInfo.m_startColumn=cellInfo.m_endColumn=c;
-      if ((cellStylesPtr++->m_flags)&1)
+      if (cellStylesPtr && ((cellStylesPtr++->m_flags)&1))
       {
         while (c<numCols && cellStylesPtr->m_flags&4)
         {

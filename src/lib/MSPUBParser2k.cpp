@@ -363,9 +363,39 @@ void MSPUBParser2k::parseTextInfos(const ContentChunkReference &, librevenge::RV
 {
 }
 
-void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream *, unsigned, ChunkHeader2k const &,
-                                       unsigned, unsigned, unsigned, unsigned, unsigned)
+void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream */*input*/, unsigned seqNum, ChunkHeader2k const &/*header*/,
+                                       unsigned, unsigned numCols, unsigned numRows, unsigned width, unsigned height)
 {
+  if (!numRows || !numCols || numRows>128 || numCols>128)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseTableInfoData: unexpected number of rows/columns\n"));
+    return;
+  }
+  TableInfo ti(numRows, numCols);
+  // just in case we have no read all row/columns
+  ti.m_rowHeightsInEmu.resize(size_t(numRows),height/numRows);
+  ti.m_columnWidthsInEmu.resize(size_t(numCols),width/numCols);
+
+  CellStyle const *cellStylesPtr=nullptr;
+  for (unsigned r=0; r<numRows; r++)
+  {
+    CellInfo cellInfo;
+    cellInfo.m_startRow=cellInfo.m_endRow=r;
+    for (unsigned c=0; c<numCols; c++)
+    {
+      cellInfo.m_startColumn=cellInfo.m_endColumn=c;
+      if (cellStylesPtr && ((cellStylesPtr++->m_flags)&1))
+      {
+        while (c<numCols && cellStylesPtr->m_flags&4)
+        {
+          cellInfo.m_endColumn=++c;
+          ++cellStylesPtr;
+        }
+      }
+      ti.m_cells.push_back(cellInfo);
+    }
+  }
+  m_collector->setShapeTableInfo(seqNum, ti);
 }
 
 void MSPUBParser2k::parseClipPath(librevenge::RVNGInputStream *, unsigned, ChunkHeader2k const &)
@@ -416,7 +446,8 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_contentChunks.push_back(ContentChunkReference(FONT, chunkOffset, 0, id, parent));
       m_fontChunkIndices.push_back(chunkId);
       break;
-    case 0x0001:
+    case 0x0001: // table in Contents
+    case 0x000a: // table in Quill
       m_contentChunks.push_back(ContentChunkReference(TABLE, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(chunkId);
       break;
@@ -440,12 +471,12 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_contentChunks.push_back(ContentChunkReference(OLE_2K_DATA, chunkOffset, 0, id, parent));
       m_oleDataChunkIndices.push_back(chunkId);
       break;
-    case 0x0000:
-    case 0x0004:
-    case 0x0005:
-    case 0x0006:
-    case 0x0007:
-    case 0x0008:
+    case 0x0000: // text in Contents
+    case 0x0004: // line
+    case 0x0005: // rect
+    case 0x0006: // shape
+    case 0x0007: // ellipe
+    case 0x0008: // text in Quill
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found shape chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(SHAPE, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(chunkId);
@@ -717,7 +748,7 @@ bool MSPUBParser2k::parsePage(librevenge::RVNGInputStream *input, unsigned seqNu
 
 bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
 {
-  // checkme: this code must also work in 98, 2000 but there is also a font list in the QUILL stream...
+  // checkme: this code must also work in 98, 2000 but there is also a font list in the Quill stream...
   if (m_version>=5) return true;
   for (auto id : m_fontChunkIndices)
   {
@@ -922,11 +953,12 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
   switch (header.m_fileType)
   {
   case 0: // old text in Contents
-  case 8: // new text in QUILL
+  case 8: // new text in Quill
     m_collector->setShapeType(chunk.seqNum, RECTANGLE);
     header.m_type=C_Text;
     break;
-  case 1:
+  case 1: // table in Contents
+  case 0xa: // table in Quill
     header.m_type=C_Table;
     break;
   case 2:
@@ -1038,7 +1070,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
-  if (m_version>=5 && (m_version>5 || header.m_fileType>8))
+  if (m_version>=5 && (m_version>5 || (header.m_fileType>8 && header.m_fileType!=0xa)))
   {
     // REMOVEME: old code
     parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
@@ -1121,7 +1153,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     }
     if (header.m_fileType == 0 && unsigned(input->tell())+11<=header.m_dataOffset)
     {
-      // text in Content
+      // text in Contents
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       unsigned txtId = 65536+readU16(input);
       m_collector->addTextShape(m_chunkIdToTextEndMap.find(seqNum)!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
@@ -1138,8 +1170,9 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       unsigned txtId = readU16(input);
       m_collector->addTextShape(txtId, seqNum);
     }
-    else if (header.m_type == C_Table && unsigned(input->tell())+(m_version==2 ? 24 : 32)<=header.m_dataOffset)
+    else if (header.m_fileType == 1 && unsigned(input->tell())+(m_version==2 ? 24 : 32)<=header.m_dataOffset)
     {
+      // table in Contents
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       unsigned txtId = 65536+readU16(input);
       if (m_chunkIdToTextEndMap.find(seqNum)!=m_chunkIdToTextEndMap.end()) txtId=seqNum;
@@ -1151,6 +1184,22 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
       unsigned width=readU32(input);
       unsigned height=readU32(input);
+      if (numRows && numCols)
+        parseTableInfoData(input, seqNum, header, txtId, numCols, numRows, width, height);
+    }
+    else if (header.m_fileType == 0xa && unsigned(input->tell())+32<=header.m_dataOffset)
+    {
+      // table in Quill
+      input->seek(10, librevenge::RVNG_SEEK_CUR); // margin? + ?
+      unsigned numCols = readU16(input);
+      input->seek(4, librevenge::RVNG_SEEK_CUR); // color
+      unsigned numRows = readU16(input);
+      input->seek(4, librevenge::RVNG_SEEK_CUR); // color
+      unsigned width=readU32(input);
+      unsigned height=readU32(input);
+      input->seek(2, librevenge::RVNG_SEEK_CUR); // unknown
+      unsigned txtId = readU16(input);
+      m_collector->addTextShape(txtId, seqNum);
       if (numRows && numCols)
         parseTableInfoData(input, seqNum, header, txtId, numCols, numRows, width, height);
     }
