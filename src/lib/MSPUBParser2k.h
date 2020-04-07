@@ -92,6 +92,7 @@ protected:
   bool parseBorderArts(librevenge::RVNGInputStream *input);
   bool parseContents(librevenge::RVNGInputStream *input) override;
   bool parseDocument(librevenge::RVNGInputStream *input);
+  bool parseFonts(librevenge::RVNGInputStream *input);
   unsigned getColorIndexByQuillEntry(unsigned entry) override;
   int translateCoordinateIfNecessary(int coordinate) const;
   virtual unsigned getFirstLineOffset() const;

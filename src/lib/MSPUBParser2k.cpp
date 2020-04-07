@@ -394,6 +394,10 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_contentChunks.push_back(ContentChunkReference(DOCUMENT, chunkOffset, 0, id, parent));
       m_documentChunkIndex = unsigned(m_contentChunks.size() - 1);
       break;
+    case 0x001e:
+      m_contentChunks.push_back(ContentChunkReference(FONT, chunkOffset, 0, id, parent));
+      m_fontChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      break;
     case 0x0002:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found image_2k chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K, chunkOffset, 0, id, parent));
@@ -475,7 +479,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:No document chunk found.\n"));
     return false;
   }
-
+  parseFonts(input);
 
   for (unsigned int paletteChunkIndex : m_paletteChunkIndices)
   {
@@ -586,6 +590,51 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
   return false;
 }
 
+bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
+{
+  if (m_version>=5) return true; // TODO
+  for (auto id : m_fontChunkIndices)
+  {
+    auto const &chunk=m_contentChunks[id];
+    ChunkHeader2k header;
+    parseChunkHeader(chunk,input,header);
+    if (!header.hasData())
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseFonts: can not find the data block %x\n", id));
+      continue;
+    }
+    ListHeader2k listHeader;
+    if (!parseListHeader(input, chunk.end, listHeader, true))
+      continue;
+    auto const &pos=listHeader.m_positions;
+    for (size_t i=0; i+1<pos.size(); ++i)
+    {
+      std::vector<unsigned char> name;
+      if (pos[i]+2>=pos[i+1] || pos[i+1]>chunk.end)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser2k::parseFonts: can not read name %d in the data block %x\n", int(i), id));
+        m_collector->addFont(name);
+        continue;
+      }
+      input->seek(pos[i]+2, librevenge::RVNG_SEEK_SET);
+      for (auto l=pos[i]+2; l<pos[i+1]; ++l)
+      {
+        auto ch=readU8(input);
+        if (ch==0)
+        {
+          if (l+1==pos[i+1])
+            break;
+          MSPUB_DEBUG_MSG(("MSPUBParser2k::parseFonts: find unexpected 0 in name %d in the data block %x\n", int(i), id));
+          name.clear();
+          break;
+        }
+        name.push_back(ch);
+      }
+      m_collector->addFont(name);
+    }
+  }
+  return true;
+}
 bool MSPUBParser2k::parseBorderArts(librevenge::RVNGInputStream *input)
 {
   if (m_borderArtChunkIndices.size()!=1)
