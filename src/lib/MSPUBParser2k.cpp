@@ -369,22 +369,19 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   unsigned trailerOffset = readU32(input);
   input->seek(trailerOffset, librevenge::RVNG_SEEK_SET);
   unsigned numBlocks = readU16(input);
-  unsigned chunkOffset = 0;
+  std::set<unsigned> offsetsSet;
   for (unsigned i = 0; i < numBlocks; ++i)
   {
     input->seek(input->tell() + 2, librevenge::RVNG_SEEK_SET);
     unsigned short id = readU16(input);
     unsigned short parent = readU16(input);
-    chunkOffset = readU32(input);
-    if (m_contentChunks.size() > 0)
-    {
-      m_contentChunks.back().end = chunkOffset;
-    }
+    auto chunkOffset = readU32(input);
+    offsetsSet.insert(chunkOffset);
     unsigned offset = input->tell();
     input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
     unsigned short typeMarker = readU16(input);
     input->seek(offset, librevenge::RVNG_SEEK_SET);
-    m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
+    m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size()));
     switch (typeMarker)
     {
     case 0x0014:
@@ -450,11 +447,29 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       break;
     }
   }
-  if (m_contentChunks.size() > 0)
+
+  // time to update the chunk limit
+  std::set<unsigned> zonesLimit;
+  input->seek(0x8, librevenge::RVNG_SEEK_SET);
+  zonesLimit.insert(readU32(input));
+  input->seek(0x12, librevenge::RVNG_SEEK_SET);
+  for (int i=0; i<3; ++i) zonesLimit.insert(readU32(input));
+  auto zIt=zonesLimit.find(trailerOffset);
+  if (zIt!=zonesLimit.end()) ++zIt;
+  if (zIt!=zonesLimit.end()) offsetsSet.insert(*zIt);
+  for (auto &chunk : m_contentChunks)
   {
-    m_contentChunks.back().end = chunkOffset;
+    auto oIt=offsetsSet.find(chunk.offset);
+    if (oIt!=offsetsSet.end()) ++oIt;
+    if (oIt!=offsetsSet.end())
+      chunk.end=*oIt;
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:can not find limit for chunk %x.\n", chunk.seqNum));
+    }
   }
 
+  // parse the main chunk
   if (!parseDocument(input))
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:No document chunk found.\n"));
@@ -502,7 +517,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     }
     else
     {
-      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents: can not read OLE data %d.\n", int(oleDataChunkIndex)));
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents: can not read OLE data %x.\n", chunk.parentSeqNum));
     }
   }
   if (!oleIds.empty())
@@ -801,12 +816,6 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
   int ye = translateCoordinateIfNecessary(readS32(input));
   m_collector->setShapeCoordinatesInEmu(chunk.seqNum, xs, ys, xe, ye);
   parseShapeFormat(input, chunk.seqNum, header);
-  if (header.m_type == C_Text)
-  {
-    input->seek(header.m_beginOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
-    unsigned txtId = readU16(input);
-    m_collector->addTextShape(txtId, chunk.seqNum);
-  }
   if (header.m_type==C_Group)
     return parseGroup(input, chunk.seqNum, page);
   m_collector->setShapeOrder(chunk.seqNum);
@@ -819,6 +828,12 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
   if (header.m_type==C_Group) // checkme
     return;
+  if (header.m_type == C_Text)
+  {
+    input->seek(header.m_beginOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
+    unsigned txtId = readU16(input);
+    m_collector->addTextShape(txtId, seqNum);
+  }
   if (header.m_type==C_CustomShape)
   {
     input->seek(header.m_beginOffset + 0x31, librevenge::RVNG_SEEK_SET);
@@ -826,7 +841,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     if (shapeType != UNKNOWN_SHAPE)
       m_collector->setShapeType(seqNum, shapeType);
   }
-  else if (header.m_type!=C_Image)
+  if (header.m_type!=C_Image)
     parseShapeFill(input, seqNum, header.m_beginOffset);
   parseShapeLine(input, header.isRectangle(), header.m_beginOffset, seqNum);
 }
@@ -866,10 +881,7 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
     for (unsigned int chunkChildIndex : chunkChildIndices)
     {
       const ContentChunkReference &childChunk = m_contentChunks.at(chunkChildIndex);
-      if (childChunk.type == SHAPE)
-        retVal = retVal && parse2kShapeChunk(childChunk, input, page, false);
-      else if (childChunk.type == GROUP)
-        retVal = retVal && parseGroup(input, chunkChildIndex, page);
+      retVal = retVal && parse2kShapeChunk(childChunk, input, page, false);
     }
   }
   m_collector->endGroup();

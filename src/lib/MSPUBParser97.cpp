@@ -143,7 +143,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       }
       if (specialIt->second==ShapeEnd)
       {
-        m_collector->addTextString(shapeParas, ++shape);
+        m_collector->addTextString(shapeParas, shape++);
         charStyle=CharacterStyle();
         shapeParas.clear();
       }
@@ -463,7 +463,6 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
   while (stillReading(input, start + length))
   {
     unsigned char ch=readU8(input);
-    ++pos;
     if (last == 0xD && ch == 0xA)
       posToType[pos]=LineEnd;
     else if (ch == 0xC)
@@ -471,6 +470,7 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
     else if (last=='#' && ch==0x5)
       posToType[pos-1]=FieldBegin;
     last = ch;
+    ++pos;
   }
 }
 
@@ -529,6 +529,12 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       bColors[j]=int(readU8(input));
       w=readU8(input);
       widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+    }
+    if (header.m_type == C_Text)
+    {
+      input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
+      unsigned txtId = readU16(input);
+      m_collector->addTextShape(txtId, seqNum);
     }
   }
   else if (header.m_type==C_CustomShape)
