@@ -2055,7 +2055,7 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
     if (ptr_fillBottom)
       fillBottomVal = toFixedPoint((int) *ptr_fillBottom);
 
-    std::shared_ptr<GradientFill> ret(new GradientFill(m_collector, angle, (int)fillType));
+    std::shared_ptr<GradientFill> ret(new GradientFill(m_collector, GradientFill::G_None, angle, (int)fillType));
     ret->setFillCenter(fillLeftVal, fillTopVal, fillRightVal, fillBottomVal);
 
     const unsigned *ptr_fillGrad = getIfExists_const(foptProperties, FIELDID_FILL_SHADE_COMPLEX);

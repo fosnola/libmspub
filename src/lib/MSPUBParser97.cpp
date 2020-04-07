@@ -783,7 +783,86 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
     m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
   }
-  if (patternId)
+  if (patternId&0x80)
+  {
+    struct GradientData
+    {
+      GradientData(GradientFill::Style style, double angle, boost::optional<double> cx=boost::none, boost::optional<double> cy=boost::none, bool swapColor=false)
+        : m_style(style)
+        , m_angle(angle)
+        , m_cx(cx)
+        , m_cy(cy)
+        , m_swapColor(swapColor)
+      {
+      }
+      GradientFill::Style m_style;
+      double m_angle;
+      boost::optional<double> m_cx;
+      boost::optional<double> m_cy;
+      bool m_swapColor;
+    };
+    static GradientData const(gradients[])=
+    {
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0,0},
+      {GradientFill::G_Rectangular,0, 1,0},
+      {GradientFill::G_Rectangular,0, 1,1},
+      {GradientFill::G_Rectangular,0, 0,1},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0,0},
+      {GradientFill::G_Ellipsoid,0, 1,0},
+      {GradientFill::G_Ellipsoid,0, 0,1},
+      {GradientFill::G_Ellipsoid,0, 0,1},
+      {GradientFill::G_Linear,0, boost::none,boost::none, true},
+      {GradientFill::G_Linear,0},
+      {GradientFill::G_Linear,90},
+      {GradientFill::G_Linear,90, boost::none,boost::none, true},
+      {GradientFill::G_Axial,0, boost::none,boost::none, true},
+      {GradientFill::G_Axial,90, boost::none,boost::none, true},
+      {GradientFill::G_Axial,45},
+      {GradientFill::G_Axial,-45},
+      {GradientFill::G_Linear,45, boost::none,boost::none, true},
+      {GradientFill::G_Linear,-45, boost::none,boost::none, true},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // triangle
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // triangle
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // almost ellipsoid
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // pentagon
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // pentagon
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // concave hexa
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // hexa
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // up arrow
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // heart
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // spiral
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // spiral 2
+    };
+    patternId&=0x7f;
+    if (unsigned(patternId)<MSPUB_N_ELEMENTS(gradients))
+    {
+      auto const &data=gradients[patternId];
+      auto gradient=std::make_shared<GradientFill>(m_collector, data.m_style, data.m_angle, data.m_cx, data.m_cy);
+      gradient->addColor(ColorReference(translate2kColorReference(colors[data.m_swapColor ? 1 : 0])), 0, 1);
+      gradient->addColor(ColorReference(translate2kColorReference(colors[data.m_swapColor ? 0 : 1])), 1, 1);
+      m_collector->setShapeFill(seqNum, gradient, false);
+    }
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: unknown gradiant =%d\n", patternId));
+    }
+  }
+  else if (patternId)
   {
     if (patternId==1 || patternId==2)
       m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(ColorReference(translate2kColorReference(colors[2-patternId])), 1, m_collector), false);

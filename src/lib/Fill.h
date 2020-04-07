@@ -87,6 +87,9 @@ private:
 
 class GradientFill : public Fill
 {
+public:
+  enum Style { G_Axial, G_Ellipsoid, G_Linear, G_Radial, G_Rectangular, G_Square, G_None };
+private:
   struct StopInfo
   {
     ColorReference m_colorReference;
@@ -95,7 +98,11 @@ class GradientFill : public Fill
     StopInfo(ColorReference colorReference, unsigned offsetPercent, double opacity) : m_colorReference(colorReference), m_offsetPercent(offsetPercent), m_opacity(opacity) { }
   };
   std::vector<StopInfo> m_stops;
+  Style m_style;
   double m_angle;
+  boost::optional<double> m_center[2];
+  boost::optional<double> m_radius;
+  // shadow
   int m_type;
   double m_fillLeftVal;
   double m_fillTopVal;
@@ -103,13 +110,14 @@ class GradientFill : public Fill
   double m_fillBottomVal;
 public:
   GradientFill(const MSPUBCollector *owner, double angle = 0, int type = 7);
+  GradientFill(const MSPUBCollector *owner, Style style, double angle, boost::optional<double> cx=0, boost::optional<double> cy=0);
   void setFillCenter(double left, double top, double right, double bottom);
   void addColor(ColorReference c, unsigned offsetPercent, double opacity);
   void addColorReverse(ColorReference c, unsigned offsetPercent, double opacity);
   void completeComplexFill();
   void getProperties(librevenge::RVNGPropertyList *out) const override;
 private:
-  GradientFill(const GradientFill &) : Fill(nullptr), m_stops(), m_angle(0), m_type(7), m_fillLeftVal(0.0), m_fillTopVal(0.0), m_fillRightVal(0.0), m_fillBottomVal(0.0) { }
+  GradientFill(const GradientFill &) : Fill(nullptr), m_stops(), m_style(G_None), m_angle(0), m_radius(), m_type(7), m_fillLeftVal(0.0), m_fillTopVal(0.0), m_fillRightVal(0.0), m_fillBottomVal(0.0) { }
   GradientFill &operator=(const GradientFill &);
 };
 }

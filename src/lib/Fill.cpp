@@ -116,8 +116,24 @@ void SolidFill::getProperties(librevenge::RVNGPropertyList *out) const
   out->insert("svg:fill-rule", "nonzero");
 }
 
-GradientFill::GradientFill(const MSPUBCollector *owner, double angle, int type) : Fill(owner), m_stops(), m_angle(angle), m_type(type), m_fillLeftVal(0.0), m_fillTopVal(0.0), m_fillRightVal(0.0), m_fillBottomVal(0.0)
+GradientFill::GradientFill(const MSPUBCollector *owner, double angle, int type) : Fill(owner), m_stops(), m_style(GradientFill::G_None), m_angle(angle), m_radius(), m_type(type), m_fillLeftVal(0.0), m_fillTopVal(0.0), m_fillRightVal(0.0), m_fillBottomVal(0.0)
 {
+}
+
+GradientFill::GradientFill(const MSPUBCollector *owner, Style style, double angle, boost::optional<double> cx, boost::optional<double> cy)
+  : Fill(owner)
+  , m_stops()
+  , m_style(style)
+  , m_angle(angle)
+  , m_radius()
+  , m_type(7)
+  , m_fillLeftVal(0.0)
+  , m_fillTopVal(0.0)
+  , m_fillRightVal(0.0)
+  , m_fillBottomVal(0.0)
+{
+  m_center[0]=cx;
+  m_center[1]=cy;
 }
 
 void GradientFill::setFillCenter(double left, double top, double right, double bottom)
@@ -154,8 +170,43 @@ void GradientFill::getProperties(librevenge::RVNGPropertyList *out) const
   out->insert("draw:fill", "gradient");
   out->insert("svg:fill-rule", "nonzero");
   out->insert("draw:angle", -m_angle); // draw:angle is clockwise in odf format
+  switch (m_style)
+  {
+  case G_Axial:
+    out->insert("draw:style", "axial");
+    break;
+  case G_Radial:
+    out->insert("draw:style", "radial");
+    break;
+  case G_Rectangular:
+    out->insert("draw:style", "rectangular");
+    break;
+  case G_Square:
+    out->insert("draw:style", "square");
+    break;
+  case G_Ellipsoid:
+    out->insert("draw:style", "ellipsoid");
+    break;
+  case G_Linear:
+    out->insert("draw:style", "linear");
+    break;
+  case G_None:
+#if !defined(__clang__)
+  default:
+#endif
+    // CHANGE: change the 2002 parser then add a warning here
+    break;
+  }
+  for (int i=0; i<2; ++i)
+  {
+    if (!m_center[i]) continue;
+    out->insert(i==0 ? "svg:cx" : "svg:cy", *m_center[i], librevenge::RVNG_PERCENT);
+  }
+  if (m_radius)
+    out->insert("svg:r", *m_radius, librevenge::RVNG_PERCENT);
   switch (m_type)
   {
+  // CHANGEME: nobody use that
   case SHADE_CENTER:
     out->insert("libmspub:shade", "center");
     if ((m_fillLeftVal > 0.5) && (m_fillTopVal > 0.5) && (m_fillRightVal > 0.5) && (m_fillBottomVal > 0.5))
