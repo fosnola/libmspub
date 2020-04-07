@@ -127,7 +127,7 @@ double doubleModulo(double x, double y)
 
 double toFixedPoint(int fp)
 {
-  unsigned short fractionalPart = ((unsigned short) fp) & 0xFFFF;
+  unsigned short fractionalPart = static_cast<unsigned short>(fp) & 0xFFFF;
   short integralPart = short(fp >> 16);
   return integralPart + fractionalPart / 65536.;
 }
@@ -156,7 +156,7 @@ unsigned correctModulo(int x, unsigned n) // returns the canonical representatio
 {
   if (x < 0)
   {
-    int result = x % (int)n;
+    int result = x % int(n);
     //sign of result is implementation defined
     if (result < 0)
     {
@@ -174,11 +174,11 @@ librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData deflated)
   const unsigned char *data = deflated.getDataBuffer();
   z_stream strm;
   int ret;
-  strm.zalloc = Z_NULL;
-  strm.zfree = Z_NULL;
-  strm.opaque = Z_NULL;
+  strm.zalloc = nullptr;
+  strm.zfree = nullptr;
+  strm.opaque = nullptr;
   strm.avail_in = 0;
-  strm.next_in = Z_NULL;
+  strm.next_in = nullptr;
   if (inflateInit2(&strm,-MAX_WBITS) != Z_OK)
   {
     return librevenge::RVNGBinaryData();
@@ -259,8 +259,6 @@ void appendUCS4(librevenge::RVNGString &text, unsigned ucs4Character)
   text.append(outbuf);
 }
 
-#define MSPUB_NUM_ELEMENTS(array) sizeof(array)/sizeof(array[0])
-
 uint8_t readU8(librevenge::RVNGInputStream *input)
 {
   if (!input || input->isEnd())
@@ -276,52 +274,52 @@ uint8_t readU8(librevenge::RVNGInputStream *input)
   uint8_t const *p = input->read(sizeof(uint8_t), numBytesRead);
 
   if (p && numBytesRead == sizeof(uint8_t))
-    return *(uint8_t const *)(p);
+    return *reinterpret_cast<uint8_t const *>(p);
   throw EndOfStreamException();
 }
 
 uint16_t readU16(librevenge::RVNGInputStream *input)
 {
-  auto p0 = (uint16_t)readU8(input);
-  auto p1 = (uint16_t)readU8(input);
-  return (uint16_t)(p0|(p1<<8));
+  auto p0 = uint16_t(readU8(input));
+  auto p1 = uint16_t(readU8(input));
+  return uint16_t(p0|(p1<<8));
 }
 
 uint32_t readU32(librevenge::RVNGInputStream *input)
 {
-  auto p0 = (uint32_t)readU8(input);
-  auto p1 = (uint32_t)readU8(input);
-  auto p2 = (uint32_t)readU8(input);
-  auto p3 = (uint32_t)readU8(input);
-  return (uint32_t)(p0|(p1<<8)|(p2<<16)|(p3<<24));
+  auto p0 = uint32_t(readU8(input));
+  auto p1 = uint32_t(readU8(input));
+  auto p2 = uint32_t(readU8(input));
+  auto p3 = uint32_t(readU8(input));
+  return uint32_t(p0|(p1<<8)|(p2<<16)|(p3<<24));
 }
 
 int8_t readS8(librevenge::RVNGInputStream *input)
 {
-  return (int8_t)readU8(input);
+  return int8_t(readU8(input));
 }
 
 int16_t readS16(librevenge::RVNGInputStream *input)
 {
-  return (int16_t)readU16(input);
+  return int16_t(readU16(input));
 }
 
 int32_t readS32(librevenge::RVNGInputStream *input)
 {
-  return (int32_t)readU32(input);
+  return int32_t(readU32(input));
 }
 
 uint64_t readU64(librevenge::RVNGInputStream *input)
 {
-  auto p0 = (uint64_t)readU8(input);
-  auto p1 = (uint64_t)readU8(input);
-  auto p2 = (uint64_t)readU8(input);
-  auto p3 = (uint64_t)readU8(input);
-  auto p4 = (uint64_t)readU8(input);
-  auto p5 = (uint64_t)readU8(input);
-  auto p6 = (uint64_t)readU8(input);
-  auto p7 = (uint64_t)readU8(input);
-  return (uint64_t)(p0|(p1<<8)|(p2<<16)|(p3<<24)|(p4<<32)|(p5<<40)|(p6<<48)|(p7<<56));
+  auto p0 = uint64_t(readU8(input));
+  auto p1 = uint64_t(readU8(input));
+  auto p2 = uint64_t(readU8(input));
+  auto p3 = uint64_t(readU8(input));
+  auto p4 = uint64_t(readU8(input));
+  auto p5 = uint64_t(readU8(input));
+  auto p6 = uint64_t(readU8(input));
+  auto p7 = uint64_t(readU8(input));
+  return uint64_t(p0|(p1<<8)|(p2<<16)|(p3<<24)|(p4<<32)|(p5<<40)|(p6<<48)|(p7<<56));
 }
 
 void readNBytes(librevenge::RVNGInputStream *input, unsigned long length, std::vector<unsigned char> &out)
@@ -375,9 +373,6 @@ unsigned long getLength(librevenge::RVNGInputStream *const input)
   return end;
 }
 
-#define SURROGATE_VALUE(h,l) (((h) - 0xd800) * 0x400 + (l) - 0xdc00 + 0x10000)
-
-
 void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned char> &characters,
                       const char *encoding)
 {
@@ -394,11 +389,11 @@ void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned c
   {
     // ICU documentation claims that character-by-character processing is faster "for small amounts of data" and "'normal' charsets"
     // (in any case, it is more convenient :) )
-    const auto *src = (const char *)characters.data();
-    const char *srcLimit = (const char *)src + characters.size();
+    const char *src = reinterpret_cast<const char *>(characters.data());
+    const char *srcLimit = src + characters.size();
     while (src < srcLimit)
     {
-      auto ucs4Character = (uint32_t)ucnv_getNextUChar(conv, &src, srcLimit, &status);
+      auto ucs4Character = uint32_t(ucnv_getNextUChar(conv, &src, srcLimit, &status));
       if (U_SUCCESS(status))
       {
         appendUCS4(text, ucs4Character);
@@ -417,7 +412,7 @@ bool stillReading(librevenge::RVNGInputStream *input, unsigned long until)
     return false;
   if (input->tell() < 0)
     return false;
-  if ((unsigned long)input->tell() >= until)
+  if (static_cast<unsigned long>(input->tell()) >= until)
     return false;
   return true;
 }
@@ -476,8 +471,8 @@ static bool createPNGFile(unsigned char const *ihdr, unsigned ihdrSize,
   std::vector<unsigned char> idatBuffer;
 
   z_stream strm;
-  strm.zalloc = 0;
-  strm.zfree = 0;
+  strm.zalloc = nullptr;
+  strm.zfree = nullptr;
   strm.next_in = const_cast<unsigned char *>(image);
   strm.avail_in = imageSize;
   strm.next_out = tmpBuffer.get();
@@ -518,7 +513,7 @@ librevenge::RVNGBinaryData createPNGForSimplePattern(uint8_t const(&pattern)[8],
     0, 0, 0, 8,           // width
     0, 0, 0, 8,           // height
     1,                    // bit depth
-    (unsigned char) 3,    // 3: indexed
+    3,                    // 3: indexed
     0,                    // compression method: 0=deflate
     0,                    // filter method: 0=adaptative
     0                     // interlace method: 0=none

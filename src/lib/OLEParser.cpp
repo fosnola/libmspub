@@ -297,7 +297,7 @@ bool OLEParser::readOlePres(librevenge::RVNGInputStream *ip, EmbeddedObject &obj
   if (fSize == 0) return false;
 
   librevenge::RVNGBinaryData data;
-  if (!readData(ip, (unsigned long)fSize, data)) return false;
+  if (!readData(ip, static_cast<unsigned long>(fSize), data)) return false;
   obj.add(data);
   return true;
 }
@@ -333,7 +333,7 @@ bool OLEParser::readOle10Native(librevenge::RVNGInputStream *ip, EmbeddedObject 
   long fSize = readS32(ip);
 
   librevenge::RVNGBinaryData data;
-  if (!readData(ip, (unsigned long) fSize, data)) return false;
+  if (!readData(ip, static_cast<unsigned long>(fSize), data)) return false;
   obj.add(data);
 
   return true;
@@ -373,7 +373,7 @@ bool OLEParser::readContents(librevenge::RVNGInputStream *input,
     return false;
   }
   long actPos = input->tell();
-  auto size = (long) readU32(input);
+  auto size = long(readU32(input));
   if (size <= 0 || input->seek(actPos+size+4, librevenge::RVNG_SEEK_SET)!=0 || !input->isEnd())
   {
     MSPUB_DEBUG_MSG(("OLEParser: warning: Contents unexpected file size=%ld\n",
@@ -383,7 +383,7 @@ bool OLEParser::readContents(librevenge::RVNGInputStream *input,
   input->seek(actPos+4, librevenge::RVNG_SEEK_SET);
 
   librevenge::RVNGBinaryData data;
-  if (!readData(input,(unsigned long) size, data)) return false;
+  if (!readData(input,static_cast<unsigned long>(size), data)) return false;
   obj.add(data);
   return true;
 }
@@ -402,7 +402,7 @@ bool OLEParser::readCONTENTS(librevenge::RVNGInputStream *input,
 
   input->seek(0, librevenge::RVNG_SEEK_SET);
 
-  auto hSize = (long) readU32(input);
+  auto hSize = long(readU32(input));
   if (input->isEnd()) return false;
   if (hSize <= 52 || input->seek(hSize+8,librevenge::RVNG_SEEK_SET) != 0
       || input->tell() != hSize+8)
@@ -414,13 +414,13 @@ bool OLEParser::readCONTENTS(librevenge::RVNGInputStream *input,
 
   // minimal checking of the "copied" header
   input->seek(4, librevenge::RVNG_SEEK_SET);
-  auto type = (long) readU32(input);
+  auto type = long(readU32(input));
   if (type < 0 || type > 4) return false;
-  auto newSize = (long) readU32(input);
+  auto newSize = long(readU32(input));
 
   if (newSize < 8) return false;
   input->seek(32+4+4, librevenge::RVNG_SEEK_CUR); // two bdbox+2:type+2:id
-  auto dataLength = (long) readU32(input);
+  auto dataLength = long(readU32(input));
   if (dataLength <= 0 || input->seek(hSize+4+dataLength,librevenge::RVNG_SEEK_SET) != 0
       || input->tell() != hSize+4+dataLength || !input->isEnd())
   {
@@ -431,7 +431,7 @@ bool OLEParser::readCONTENTS(librevenge::RVNGInputStream *input,
 
   input->seek(4+hSize, librevenge::RVNG_SEEK_SET);
   librevenge::RVNGBinaryData data;
-  if (!readData(input, (unsigned long)dataLength, data)) return false;
+  if (!readData(input, static_cast<unsigned long>(dataLength), data)) return false;
   obj.add(data);
 
   return true;

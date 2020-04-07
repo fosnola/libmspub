@@ -840,7 +840,7 @@ bool MSPUBParser91::parseShape(librevenge::RVNGInputStream *input, BlockInfo91 c
       };
 
       m_collector->setShapeFill(info.m_id, std::make_shared<Pattern88Fill>
-                                (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),getColor(colors[1]), getColor(colors[0])), false);
+                                (m_collector,reinterpret_cast<uint8_t const(&)[8]>(patterns[8*(patternId-3)]),getColor(colors[1]), getColor(colors[0])), false);
     }
     else
     {
@@ -943,7 +943,7 @@ bool MSPUBParser91::parseOLEPicture(librevenge::RVNGInputStream *input, unsigned
   }
   auto dSz=readU32(input);
   long actPos=input->tell();
-  if (dSz>0x40000000 || dSz<10 || dSz>(unsigned)(endPos-actPos))
+  if (dSz>0x40000000 || dSz<10 || dSz>unsigned(endPos-actPos))
   {
     MSPUB_DEBUG_MSG(("MSPUBParser91::parseOLEPicture: pict size seems bad\n"));
     return false;

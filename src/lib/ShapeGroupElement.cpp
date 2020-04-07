@@ -59,10 +59,10 @@ void ShapeGroupElement::visit(std::function<
 {
   const ShapeInfo info = m_shapeInfo.get_value_or(ShapeInfo());
   Coordinate coord = info.m_coordinates.get_value_or(Coordinate());
-  double centerX = ((double)coord.m_xs + (double)coord.m_xe) / (2 * EMUS_IN_INCH);
-  double centerY = ((double)coord.m_ys + (double)coord.m_ye) / (2 * EMUS_IN_INCH);
-  double relativeCenterX = ((double)relativeTo.m_xs + (double)relativeTo.m_xe) / (2 * EMUS_IN_INCH);
-  double relativeCenterY = ((double)relativeTo.m_ys + (double)relativeTo.m_ye) / (2 * EMUS_IN_INCH);
+  double centerX = (double(coord.m_xs) + double(coord.m_xe)) / (2 * EMUS_IN_INCH);
+  double centerY = (double(coord.m_ys) + double(coord.m_ye)) / (2 * EMUS_IN_INCH);
+  double relativeCenterX = (double(relativeTo.m_xs) + double(relativeTo.m_xe)) / (2 * EMUS_IN_INCH);
+  double relativeCenterY = (double(relativeTo.m_ys) + double(relativeTo.m_ye)) / (2 * EMUS_IN_INCH);
   double offsetX = centerX - relativeCenterX;
   double offsetY = centerY - relativeCenterY;
   VectorTransformation2D foldedTransform = VectorTransformation2D::fromTranslate(-offsetX, -offsetY)

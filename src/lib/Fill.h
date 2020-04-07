@@ -26,7 +26,7 @@ protected:
 public:
   Fill(const MSPUBCollector *owner);
   virtual void getProperties(librevenge::RVNGPropertyList *out) const = 0;
-  virtual ~Fill() { }
+  virtual ~Fill();
 private:
   Fill(const Fill &) : m_owner(nullptr) { }
   Fill &operator=(const Fill &);

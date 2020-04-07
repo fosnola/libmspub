@@ -84,7 +84,7 @@ static void separateTabsAndInsertText(librevenge::RVNGDrawingInterface *iface, c
 
       iface->insertLineBreak();
     }
-    else if ((unsigned char)(*(i())) <= 0x1f)
+    else if (static_cast<unsigned char>(*(i())) <= 0x1f)
     {
       MSPUB_DEBUG_MSG(("MSPUBCollector[separateTabsAndInsertText]:find odd character %x\n", unsigned(*i())));
     }
@@ -417,7 +417,7 @@ void MSPUBCollector::setRectCoordProps(Coordinate coord, librevenge::RVNGPropert
   props->insert("svg:height", coord.getHeightIn());
 }
 
-Coordinate getFudgedCoordinates(Coordinate coord, const std::vector<Line> &lines, bool makeBigger, BorderPosition borderPosition)
+static Coordinate getFudgedCoordinates(Coordinate coord, const std::vector<Line> &lines, bool makeBigger, BorderPosition borderPosition)
 {
   Coordinate fudged = coord;
   unsigned topFudge = 0;
@@ -643,11 +643,11 @@ void MSPUBCollector::addPaletteColor(Color c)
   m_paletteColors.push_back(c);
 }
 
-void no_op()
+static void no_op()
 {
 }
 
-void endShapeGroup(librevenge::RVNGDrawingInterface *painter)
+static void endShapeGroup(librevenge::RVNGDrawingInterface *painter)
 {
   painter->endLayer();
 }
@@ -1000,10 +1000,10 @@ void MSPUBCollector::paintTextObject(const ShapeInfo &info, std::vector<TextPara
 {
   librevenge::RVNGPropertyList props(frameProps);
   Margins margins = info.m_margins.get_value_or(Margins());
-  props.insert("fo:padding-left", (double)margins.m_left / EMUS_IN_INCH);
-  props.insert("fo:padding-top", (double)margins.m_top / EMUS_IN_INCH);
-  props.insert("fo:padding-right", (double)margins.m_right / EMUS_IN_INCH);
-  props.insert("fo:padding-bottom", (double)margins.m_bottom / EMUS_IN_INCH);
+  props.insert("fo:padding-left", double(margins.m_left) / EMUS_IN_INCH);
+  props.insert("fo:padding-top", double(margins.m_top) / EMUS_IN_INCH);
+  props.insert("fo:padding-right", double(margins.m_right) / EMUS_IN_INCH);
+  props.insert("fo:padding-bottom", double(margins.m_bottom) / EMUS_IN_INCH);
   if (bool(info.m_verticalAlign))
   {
     switch (info.m_verticalAlign.get())
@@ -1024,13 +1024,13 @@ void MSPUBCollector::paintTextObject(const ShapeInfo &info, std::vector<TextPara
   {
     unsigned ncols = info.m_numColumns.get_value_or(0);
     if (ncols > 0)
-      props.insert("fo:column-count", (int)ncols);
+      props.insert("fo:column-count", int(ncols));
   }
   if (info.m_columnSpacing)
   {
     unsigned ngap = info.m_columnSpacing;
     if (ngap > 0)
-      props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
+      props.insert("fo:column-gap", double(ngap) / EMUS_IN_INCH);
   }
   m_painter->startTextObject(props);
   TextLineState state;
@@ -1204,7 +1204,7 @@ void MSPUBCollector::openTextLine(TextLineState &state, const ParagraphStyle &pa
     librevenge::RVNGPropertyList level;
     list->addTo(level);
     if (paraStyle.m_firstLineIndentEmu && *paraStyle.m_firstLineIndentEmu<0)
-      level.insert("text:min-label-width", -(double)*paraStyle.m_firstLineIndentEmu / EMUS_IN_INCH);
+      level.insert("text:min-label-width", -double(*paraStyle.m_firstLineIndentEmu) / EMUS_IN_INCH);
     if (list->m_listType==ORDERED)
       m_painter->openOrderedListLevel(level);
     else
@@ -1398,7 +1398,7 @@ const char *MSPUBCollector::getCalculatedEncoding() const
     goto csd_fail;
   }
   // don't worry, the below call doesn't require a null-terminated string.
-  ucsdet_setText(ucd, (const char *)m_allText.data(), (int32_t) m_allText.size(), &status);
+  ucsdet_setText(ucd, reinterpret_cast<const char *>(m_allText.data()), int32_t(m_allText.size()), &status);
   if (U_FAILURE(status))
   {
     goto csd_fail;
@@ -1459,7 +1459,7 @@ void MSPUBCollector::createFontsEncoding() const
       m_fontsEncoding.push_back(defaultEncoding);
       continue;
     }
-    std::string fName((char const *)font.data());
+    std::string fName(reinterpret_cast<char const *>(font.data()));
     if (fName.length()!=--len)
     {
       m_fontsEncoding.push_back(defaultEncoding);
@@ -1667,7 +1667,7 @@ MSPUBCollector::~MSPUBCollector()
 void MSPUBCollector::setShapeRotation(unsigned seqNum, double rotation)
 {
   m_shapeInfosBySeqNum[seqNum].m_rotation = rotation;
-  m_shapeInfosBySeqNum[seqNum].m_innerRotation = (int)rotation;
+  m_shapeInfosBySeqNum[seqNum].m_innerRotation = int(rotation);
 }
 
 void MSPUBCollector::setShapeFlip(unsigned seqNum, bool flipVertical, bool flipHorizontal)
@@ -1796,27 +1796,27 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
                               defaultStyle.m_rightIndentEmu.get_value_or(0));
   if (spaceAfterEmu != 0)
   {
-    ret.insert("fo:margin-bottom", (double)spaceAfterEmu / EMUS_IN_INCH);
+    ret.insert("fo:margin-bottom", double(spaceAfterEmu) / EMUS_IN_INCH);
   }
   if (spaceBeforeEmu != 0)
   {
-    ret.insert("fo:margin-top", (double)spaceBeforeEmu / EMUS_IN_INCH);
+    ret.insert("fo:margin-top", double(spaceBeforeEmu) / EMUS_IN_INCH);
   }
   if (style.m_listInfo)
   {
     if (firstLineIndentEmu+int(leftIndentEmu)!=0)
-      ret.insert("fo:margin-left", (double)(firstLineIndentEmu+int(leftIndentEmu)) / EMUS_IN_INCH);
+      ret.insert("fo:margin-left", double(firstLineIndentEmu+int(leftIndentEmu)) / EMUS_IN_INCH);
   }
   else
   {
     if (firstLineIndentEmu != 0)
-      ret.insert("fo:text-indent", (double)firstLineIndentEmu / EMUS_IN_INCH);
+      ret.insert("fo:text-indent", double(firstLineIndentEmu) / EMUS_IN_INCH);
     if (leftIndentEmu != 0)
-      ret.insert("fo:margin-left", (double)leftIndentEmu / EMUS_IN_INCH);
+      ret.insert("fo:margin-left", double(leftIndentEmu) / EMUS_IN_INCH);
   }
   if (rightIndentEmu != 0)
   {
-    ret.insert("fo:margin-right", (double)rightIndentEmu / EMUS_IN_INCH);
+    ret.insert("fo:margin-right", double(rightIndentEmu) / EMUS_IN_INCH);
   }
 #if 0
   // style:drop-cap is ignored in LibreOffice draw
@@ -1927,11 +1927,11 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
   auto textSizeInPt = style.textSizeInPt ? style.textSizeInPt : defaultCharStyle.textSizeInPt;
   if (textSizeInPt) ret.insert("fo:font-size", get(textSizeInPt) / POINTS_IN_INCH);
 
-  if (style.colorIndex >= 0 && (size_t)style.colorIndex < m_textColors.size())
+  if (style.colorIndex >= 0 && size_t(style.colorIndex) < m_textColors.size())
   {
     ret.insert("fo:color", getColorString(m_textColors[size_t(style.colorIndex)].getFinalColor(m_paletteColors)));
   }
-  else if (defaultCharStyle.colorIndex >= 0 && (size_t)defaultCharStyle.colorIndex < m_textColors.size())
+  else if (defaultCharStyle.colorIndex >= 0 && size_t(defaultCharStyle.colorIndex) < m_textColors.size())
   {
     ret.insert("fo:color", getColorString(m_textColors[size_t(defaultCharStyle.colorIndex)].getFinalColor(m_paletteColors)));
   }
@@ -2029,7 +2029,7 @@ librevenge::RVNGString MSPUBCollector::paintDropCap(librevenge::RVNGString const
 librevenge::RVNGString MSPUBCollector::getColorString(const Color &color)
 {
   librevenge::RVNGString ret;
-  ret.sprintf("#%.2x%.2x%.2x",(unsigned char)color.r, (unsigned char)color.g, (unsigned char)color.b);
+  ret.sprintf("#%.2x%.2x%.2x",static_cast<unsigned char>(color.r), static_cast<unsigned char>(color.g), static_cast<unsigned char>(color.b));
   //MSPUB_DEBUG_MSG(("String for r: 0x%x, g: 0x%x, b: 0x%x is %s\n", color.r, color.g, color.b, ret.cstr()));
   return ret;
 }
@@ -2254,14 +2254,14 @@ void MSPUBCollector::ponderStringEncoding(
 void MSPUBCollector::setWidthInEmu(unsigned long widthInEmu)
 {
   //FIXME: Warn if this is called twice
-  m_width = ((double)widthInEmu) / EMUS_IN_INCH;
+  m_width = double(widthInEmu) / EMUS_IN_INCH;
   m_widthSet = true;
 }
 
 void MSPUBCollector::setHeightInEmu(unsigned long heightInEmu)
 {
   //FIXME: Warn if this is called twice
-  m_height = ((double)heightInEmu) / EMUS_IN_INCH;
+  m_height = double(heightInEmu) / EMUS_IN_INCH;
   m_heightSet = true;
 }
 

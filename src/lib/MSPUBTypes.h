@@ -58,7 +58,7 @@ enum class Underline
   ThickDotDotDash,
   LongDash,
   ThickLongDash,
-  DoubleWave,
+  DoubleWave
 };
 
 enum Alignment

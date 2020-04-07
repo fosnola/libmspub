@@ -5851,7 +5851,7 @@ struct ShapeElementCommand
   ShapeElementCommand(Command command, unsigned char count) : m_command(command), m_count(count) { }
 };
 
-ShapeElementCommand getCommandFromBinary(unsigned short binary)
+static ShapeElementCommand getCommandFromBinary(unsigned short binary)
 {
   Command cmd;
   unsigned count = 0;
@@ -5921,10 +5921,10 @@ ShapeElementCommand getCommandFromBinary(unsigned short binary)
     count = 1;
     break;
   }
-  return ShapeElementCommand(cmd, (unsigned char) count);
+  return ShapeElementCommand(cmd, static_cast<unsigned char>(count));
 }
 
-double getSpecialIfNecessary(std::function<double(unsigned index)> calculator, int val)
+static double getSpecialIfNecessary(std::function<double(unsigned index)> calculator, int val)
 {
   bool special = unsigned(val) & 0x80000000;
   return special ? calculator(unsigned(val) ^ 0x80000000) : val;
@@ -5940,7 +5940,7 @@ struct LineInfo
   librevenge::RVNGString m_color;
   bool m_lineExists;
   LineInfo(librevenge::RVNGPropertyListVector vertices, Line current, std::vector<Color> const &palette) : m_vertices(vertices),
-    m_width((double)(current.m_widthInEmu) / EMUS_IN_INCH),
+    m_width(double(current.m_widthInEmu) / EMUS_IN_INCH),
     m_color(MSPUBCollector::getColorString(current.m_color.getFinalColor(palette))),
     m_lineExists(current.m_lineExists) { }
   void output(librevenge::RVNGDrawingInterface *painter, librevenge::RVNGPropertyList &graphicsProps)
@@ -5958,12 +5958,12 @@ private:
 
 }
 
-void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeType, const std::vector<Line> &lines,
-                      Vector2D center, VectorTransformation2D transform,
-                      double x, double y, double scaleX, double scaleY,
-                      bool drawStroke, librevenge::RVNGPropertyList &graphicsProps, librevenge::RVNGDrawingInterface *painter,
-                      std::function<double(unsigned index)> calculator,
-                      const std::vector<Color> &palette)
+static void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeType, const std::vector<Line> &lines,
+                             Vector2D center, VectorTransformation2D transform,
+                             double x, double y, double scaleX, double scaleY,
+                             bool drawStroke, librevenge::RVNGPropertyList &graphicsProps, librevenge::RVNGDrawingInterface *painter,
+                             std::function<double(unsigned index)> calculator,
+                             const std::vector<Color> &palette)
 {
   std::vector<LineInfo> lineInfos;
   unsigned i_line = 0;
@@ -5977,7 +5977,7 @@ void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeT
     if (i > 0)
     {
       librevenge::RVNGPropertyList vertexStart;
-      double lineWidth = (double)(lines[i_line].m_widthInEmu) / EMUS_IN_INCH;
+      double lineWidth = double(lines[i_line].m_widthInEmu) / EMUS_IN_INCH;
       switch (i - 1) // fudge the lines inward by half their width so they are fully inside the shape and hence proper borders
       {
       case 0:
@@ -6005,7 +6005,7 @@ void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeT
     old = vector;
     if (rectangle)
     {
-      double lineWidth = (double)(lines[i_line].m_widthInEmu) / EMUS_IN_INCH;
+      double lineWidth = double(lines[i_line].m_widthInEmu) / EMUS_IN_INCH;
       switch (i) // fudge the lines inward by half their width so they are fully inside the shape and hence proper borders
       {
       case 1:
@@ -6076,7 +6076,7 @@ void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeT
   }
 }
 
-void getRayEllipseIntersection(double initX, double initY, double rx, double ry, double cx, double cy, double &xOut, double &yOut)
+static void getRayEllipseIntersection(double initX, double initY, double rx, double ry, double cx, double cy, double &xOut, double &yOut)
 {
   double x = initX - cx;
   double y = initY - cy;
@@ -6131,14 +6131,14 @@ librevenge::RVNGPropertyList calcClipPath(const std::vector<Vertex> &verts, doub
   Vector2D vector(x + scaleX * verts[0].m_x, y + scaleY * verts[0].m_y);
   vector = transform.transformWithOrigin(vector, center);
   librevenge::RVNGString sValue;
-  sValue.sprintf("M %f %f", (double)vector.m_x, (double)vector.m_y);
+  sValue.sprintf("M %f %f", double(vector.m_x), double(vector.m_y));
   clipString.append(sValue);
   for (size_t i = 1; i < verts.size(); ++i)
   {
     Vector2D vector2(x + scaleX * verts[i].m_x, y + scaleY * verts[i].m_y);
     vector2 = transform.transformWithOrigin(vector2, center);
     librevenge::RVNGString sValue2;
-    sValue2.sprintf(" L %f %f", (double)vector2.m_x, (double)vector2.m_y);
+    sValue2.sprintf(" L %f %f", double(vector2.m_x), double(vector2.m_y));
     clipString.append(sValue2);
   }
   clipString.append(" Z");
@@ -6189,7 +6189,7 @@ void writeCustomShape(ShapeType shapeType, librevenge::RVNGPropertyList &graphic
         {
           graphicsProps.insert("draw:stroke", "none");
         }
-        graphicsProps.insert("svg:stroke-width", (double)(first.m_widthInEmu) / EMUS_IN_INCH);
+        graphicsProps.insert("svg:stroke-width", double(first.m_widthInEmu) / EMUS_IN_INCH);
         graphicsProps.insert("svg:stroke-color", MSPUBCollector::getColorString(first.m_color.getFinalColor(palette)));
         painter->setStyle(graphicsProps);
       }
@@ -6223,7 +6223,7 @@ void writeCustomShape(ShapeType shapeType, librevenge::RVNGPropertyList &graphic
       {
         graphicsProps.insert("draw:stroke", "none");
       }
-      graphicsProps.insert("svg:stroke-width", (double)(first.m_widthInEmu) / EMUS_IN_INCH);
+      graphicsProps.insert("svg:stroke-width", double(first.m_widthInEmu) / EMUS_IN_INCH);
       graphicsProps.insert("svg:stroke-color", MSPUBCollector::getColorString(first.m_color.getFinalColor(palette)));
       painter->setStyle(graphicsProps);
     }
@@ -6634,19 +6634,19 @@ std::shared_ptr<const CustomShape> getFromDynamicCustomShape(const DynamicCustom
 {
   return std::shared_ptr<const CustomShape>(new CustomShape(
                                               dcs.m_vertices.empty() ? nullptr : dcs.m_vertices.data(),
-                                              (unsigned)dcs.m_vertices.size(),
+                                              unsigned(dcs.m_vertices.size()),
                                               dcs.m_elements.empty() ? nullptr : dcs.m_elements.data(),
-                                              (unsigned)dcs.m_elements.size(),
+                                              unsigned(dcs.m_elements.size()),
                                               dcs.m_calculations.empty() ? nullptr : dcs.m_calculations.data(),
-                                              (unsigned)dcs.m_calculations.size(),
+                                              unsigned(dcs.m_calculations.size()),
                                               dcs.m_defaultAdjustValues.empty() ? nullptr :
                                               dcs.m_defaultAdjustValues.data(),
-                                              (unsigned)dcs.m_defaultAdjustValues.size(),
+                                              unsigned(dcs.m_defaultAdjustValues.size()),
                                               dcs.m_textRectangles.empty() ? nullptr : dcs.m_textRectangles.data(),
-                                              (unsigned)dcs.m_textRectangles.size(),
+                                              unsigned(dcs.m_textRectangles.size()),
                                               dcs.m_coordWidth, dcs.m_coordHeight,
                                               dcs.m_gluePoints.empty() ? nullptr : dcs.m_gluePoints.data(),
-                                              (unsigned)dcs.m_gluePoints.size(),
+                                              unsigned(dcs.m_gluePoints.size()),
                                               dcs.m_adjustShiftMask
                                             ));
 }

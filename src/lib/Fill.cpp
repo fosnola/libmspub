@@ -21,7 +21,9 @@ namespace libmspub
 Fill::Fill(const MSPUBCollector *owner) : m_owner(owner)
 {
 }
-
+Fill::~Fill()
+{
+}
 ImgFill::ImgFill(unsigned imgIndex, const MSPUBCollector *owner, bool isTexture, int rot) : Fill(owner), m_imgIndex(imgIndex), m_isTexture(isTexture), m_rotation(rot)
 {
 }
@@ -70,11 +72,11 @@ void PatternFill::getProperties(librevenge::RVNGPropertyList *out) const
       fixedImg.append(fgColor.b);
       fixedImg.append(fgColor.g);
       fixedImg.append(fgColor.r);
-      fixedImg.append((unsigned char)'\0');
+      fixedImg.append(static_cast<unsigned char>('\0'));
       fixedImg.append(bgColor.b);
       fixedImg.append(bgColor.g);
       fixedImg.append(bgColor.r);
-      fixedImg.append((unsigned char)'\0');
+      fixedImg.append(static_cast<unsigned char>('\0'));
       fixedImg.append(data->getDataBuffer() + 0x36 + 8, data->size() - 0x36 - 8);
       data = &fixedImg;
     }
@@ -111,7 +113,7 @@ void SolidFill::getProperties(librevenge::RVNGPropertyList *out) const
   out->insert("draw:fill", "solid");
   out->insert("draw:fill-color", MSPUBCollector::getColorString(fillColor));
   librevenge::RVNGString val;
-  val.sprintf("%d%%", (int)(m_opacity * 100));
+  val.sprintf("%d%%", int(m_opacity * 100));
   out->insert("draw:opacity", val);
   out->insert("svg:fill-rule", "nonzero");
 }
@@ -235,7 +237,7 @@ void GradientFill::getProperties(librevenge::RVNGPropertyList *out) const
     sValue.sprintf("%d%%", stop.m_offsetPercent);
     stopProps.insert("svg:offset", sValue);
     stopProps.insert("svg:stop-color", MSPUBCollector::getColorString(c));
-    sValue.sprintf("%d%%", (int)(stop.m_opacity * 100));
+    sValue.sprintf("%d%%", int(stop.m_opacity * 100));
     stopProps.insert("svg:stop-opacity", sValue);
     ret.append(stopProps);
   }

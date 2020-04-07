@@ -251,7 +251,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   {
     // change of style
     auto actPos=input->tell();
-    auto cIt=posToSpanMap.find((unsigned) actPos);
+    auto cIt=posToSpanMap.find(unsigned(actPos));
     if (cIt!=posToSpanMap.end())
     {
       if (!spanChars.empty())
@@ -263,7 +263,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       if (cIt->second<spanStyles.size())
         charStyle=spanStyles[cIt->second];
     }
-    auto pIt=posToParaMap.find((unsigned) actPos);
+    auto pIt=posToParaMap.find(unsigned(actPos));
     if (pIt!=posToParaMap.end())
     {
       if (pIt->second<paraStyles.size())
@@ -271,7 +271,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       else
         paraStyle=ParagraphStyle();
     }
-    auto cellIt=posToCellMap.find((unsigned) actPos);
+    auto cellIt=posToCellMap.find(unsigned(actPos));
     if (cellIt!=posToCellMap.end())
     {
       if (cellIt->second<=cellStyles.size())

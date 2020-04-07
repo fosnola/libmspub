@@ -69,7 +69,7 @@ bool MSPUBParser2k::getChunkReference(unsigned seqNum, ContentChunkReference &ch
 }
 
 // Takes a line width specifier in Pub2k format and translates it into quarter points
-unsigned short translateLineWidth(unsigned char lineWidth)
+static unsigned short translateLineWidth(unsigned char lineWidth)
 {
   return (lineWidth&0x80) ? (lineWidth&0x7f) : 4*lineWidth;
 }
@@ -928,7 +928,7 @@ bool MSPUBParser2k::parseIdList(librevenge::RVNGInputStream *input, unsigned lon
 
 bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition)
 {
-  unsigned start=(unsigned)input->tell();
+  unsigned start=unsigned(input->tell());
   if (start+10>endPos)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: the zone seems too short\n"));
@@ -1099,7 +1099,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
 {
   if (m_version>=6)
   {
-    // REMOVEME: old code
+    // REMOVEME: old code, remove also parseShapeFill and parseShapeLine
     parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
     if (header.m_type==C_Group) // checkme
       return;
@@ -1123,7 +1123,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   }
   if (header.m_type==C_Group)
     return;
-  if (unsigned(input->tell())+(m_version==2 ? 9 : m_version<5 ? 19 : m_version==5 ? 27 : 29)>header.m_dataOffset)
+  if (unsigned(input->tell())+(m_version==2 ? 9 : m_version<5 ? 19 : 27)>header.m_dataOffset)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseShapeFormat: the zone is too small\n"));
     return;
@@ -1152,7 +1152,8 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     widths[0]=double(translateLineWidth(w))/4;
     bColors[0]=readU32(input);
   }
-  input->seek(2,librevenge::RVNG_SEEK_CUR); // 0
+  if (m_version<6)
+    input->seek(2,librevenge::RVNG_SEEK_CUR); // 0
   int borderId=0xfffe; // none
   if (header.isRectangle() && unsigned(input->tell())+(m_version==2 ? 9 : 21)<=header.m_dataOffset)
   {
@@ -1235,7 +1236,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   }
   else if (header.m_type==C_CustomShape && unsigned(input->tell())+12<=header.m_dataOffset)
   {
-    ShapeType shapeType = getShapeType((unsigned char)readU16(input));
+    ShapeType shapeType = getShapeType(static_cast<unsigned char>(readU16(input)));
     if (shapeType != UNKNOWN_SHAPE)
       m_collector->setShapeType(seqNum, shapeType);
     auto flags=readU16(input);
@@ -1433,7 +1434,7 @@ void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       };
 
       m_collector->setShapeFill(seqNum, std::make_shared<Pattern88Fill>
-                                (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),
+                                (m_collector,reinterpret_cast<uint8_t const(&)[8]>(patterns[8*(patternId-3)]),
                                  getColorReferenceByIndex(colors[1]),
                                  getColorReferenceByIndex(colors[0])), false);
     }
