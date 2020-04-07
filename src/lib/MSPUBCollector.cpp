@@ -830,6 +830,8 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       graphicsProps.remove("draw:shadow-opacity");
     }
   }
+  if (bool(info.m_beginArrow)) info.m_beginArrow->addTo(graphicsProps, true);
+  if (bool(info.m_endArrow)) info.m_endArrow->addTo(graphicsProps, false);
   const std::vector<Line> &lines = info.m_lines;
   if (hasStroke)
   {

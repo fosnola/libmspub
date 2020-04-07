@@ -10,6 +10,8 @@
 #ifndef INCLUDED_ARROW_H
 #define INCLUDED_ARROW_H
 
+#include <librevenge/librevenge.h>
+
 namespace libmspub
 {
 enum ArrowStyle
@@ -36,6 +38,7 @@ struct Arrow
     m_style(style), m_width(width), m_height(height)
   {
   }
+  void addTo(librevenge::RVNGPropertyList &propList, bool start) const;
 };
 } // namespace libmspub
 

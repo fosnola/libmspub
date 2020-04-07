@@ -251,7 +251,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   m_collector->addDefaultCharacterStyle(defaultCharStyle);
   for (int i=0; i<8; ++i) m_collector->addTextColor(getColor(i));
 
-  input->seek(12, librevenge::RVNG_SEEK_CUR);
+  input->seek(14, librevenge::RVNG_SEEK_CUR);
   unsigned textStart = readU32(input);
   unsigned textEnd = readU32(input);
   unsigned index[3];
@@ -749,9 +749,9 @@ bool MSPUBParser91::parseShape(librevenge::RVNGInputStream *input, BlockInfo91 c
     if ((flags&0x10)==0)
       m_collector->setShapeFlip(info.m_id, true, false);
     if (flags&0x20)
-      m_collector->setShapeBeginArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM));
-    if (flags&0x40)
       m_collector->setShapeEndArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM));
+    if (flags&0x40)
+      m_collector->setShapeBeginArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM));
     m_collector->setShapeType(info.m_id,LINE);
     break;
   case 5:
