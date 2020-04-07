@@ -245,7 +245,7 @@ unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k) const
     };
     return unsigned((rgb[0]) | (rgb[1] << 8) | (rgb[2] << 16));
   }
-  if (m_version==3 && (ref2k>>24)==0x81)
+  if (m_version>=3 && m_version<=4 && (ref2k>>24)==0x81)
   {
     // v3: find
     //    + 00 00 00 id
@@ -606,6 +606,11 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
     auto const &chunk=m_contentChunks[m_documentChunkIndex.get()];
     ChunkHeader2k header;
     parseChunkHeader(chunk,input,header);
+    // changeme: we must find the version before...
+    if (m_version==5 && header.m_maxHeaderSize==0xde) // 2: 5e, 3: 78, 97: 9e, 98: d2, 2000: de
+      m_version=6;
+    else if (m_version==3 && header.m_maxHeaderSize==0x9e)
+      m_version=4;
     if (header.headerLength()>=28)   // size 54|6a|b2
     {
       input->seek(header.m_beginOffset+0x12, librevenge::RVNG_SEEK_SET);
@@ -629,14 +634,22 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
       if (parseIdList(input, chunk.end, pages) && pages.size()>=2)
       {
         unsigned masterId=pages[1];
-        if (m_version==3 && pages.size()>3)
+        unsigned numExtras = m_version == 2 ? 0 : m_version <=4 ? 1 : m_version==5 ? 3 : 0;
+        // v3,97 : followed by one page(default page?)
+        // 98: followed by three pages(default first page, even page, odd page?)
+        auto numPages=pages.size();
+        for (unsigned extra=1; extra<=numExtras; ++extra)
         {
-          if (m_chunkChildIndicesById.find(pages.back())==m_chunkChildIndicesById.end())
-            pages.pop_back(); // what is the last page
+          if (numPages<extra) break;
+          unsigned page=unsigned(numPages-extra);
+          if (page<3) break; // keep at least layout, background, first page
+          if (m_chunkChildIndicesById.find(pages[page])!=m_chunkChildIndicesById.end())
+            continue; // this page contain some data, unsure if we want to keep it
+          pages.erase(pages.begin()+int(page));
         }
         for (size_t i=2; i<pages.size(); ++i)
           m_collector->addPage(pages[i]);
-        if (m_version<=3)
+        if (m_version<=5)
         {
           m_collector->addPage(masterId);
           m_collector->designateMasterPage(masterId);
@@ -939,7 +952,8 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
   default:
     break;
   }
-  input->seek(long(chunkOffset)+3, librevenge::RVNG_SEEK_SET);
+  input->seek(long(chunkOffset)+2, librevenge::RVNG_SEEK_SET);
+  header.m_maxHeaderSize=readU8(input);
   header.m_dataOffset=unsigned(chunkOffset+readU8(input));
 }
 
@@ -955,7 +969,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 
   unsigned page = pageSeqNum.get_value_or(chunk.parentSeqNum);
   input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
-  if (topLevelCall && m_version>=5)
+  if (topLevelCall && m_version>5)
   {
     // ignore non top level shapes
     int i_page = -1;
@@ -1060,7 +1074,7 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
   bool retVal = true;
   m_collector->beginGroup();
   m_collector->setCurrentGroupSeqNum(seqNum);
-  if (m_version<5)
+  if (m_version<=6)
   {
     ContentChunkReference chunk;
     if (!getChunkReference(seqNum, chunk))

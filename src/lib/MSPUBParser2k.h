@@ -35,6 +35,7 @@ public:
       : m_type(C_Unknown)
       , m_fileType(0xffff)
       , m_beginOffset(0)
+      , m_maxHeaderSize(0)
       , m_dataOffset(0)
       , m_endOffset(0)
       , m_flagOffset(0)
@@ -59,6 +60,7 @@ public:
     ChunkType2k m_type;
     unsigned m_fileType;
     unsigned m_beginOffset;
+    unsigned m_maxHeaderSize;
     unsigned m_dataOffset;
     unsigned m_endOffset;
     unsigned m_flagOffset; // removeme
