@@ -196,11 +196,12 @@ struct ParagraphStyle
   std::vector<TabStop> m_tabStops;
   boost::optional<unsigned> m_dropCapLines;
   boost::optional<unsigned> m_dropCapLetters;
+  boost::optional<unsigned> m_dropCapColor; // in abgr
   boost::optional<double> m_letterSpacingInPt;
   ParagraphStyle() :
     m_align(), m_defaultCharStyleIndex(), m_lineSpacing(), m_spaceBeforeEmu(),
     m_spaceAfterEmu(), m_firstLineIndentEmu(), m_leftIndentEmu(),
-    m_rightIndentEmu(), m_listInfo(), m_tabStops(), m_dropCapLines(), m_dropCapLetters(), m_letterSpacingInPt()
+    m_rightIndentEmu(), m_listInfo(), m_tabStops(), m_dropCapLines(), m_dropCapLetters(), m_dropCapColor(), m_letterSpacingInPt()
   {
   }
 };

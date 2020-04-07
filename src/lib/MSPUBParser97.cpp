@@ -685,11 +685,32 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
     {
       input->seek(debPos+38, librevenge::RVNG_SEEK_SET);
       unsigned fancy=readU16(input);
-      if (fancy)
+      if (fancy>=1 && fancy<=15)
       {
-        style.m_dropCapLines=2;
-        style.m_dropCapLetters=1;
-        MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: find fancy character=%x, ignored\n", fancy));
+        struct Fancy
+        {
+          Fancy(unsigned color, int lines, int letters=1) : m_color(color), m_lines(lines), m_letters(letters)
+          {
+          }
+          unsigned m_color; // in abgr
+          int m_lines;
+          int m_letters;
+        };
+        Fancy const fancies[]=
+        {
+          /*0: none*/{0x974d88,4}, {0xfa2900,1}, {0x2828e0,2},
+          {0x409040,2}, {0x941800,1}, {0x000000,1}, {0x499999,3},
+          {0x2828e0,3}, {0x491B85,2}, {0xfa2900,2,2}, {0x941800,2} /*it*/,
+          {0xff3bdc,1}, {0x000000,3}, {0x409040,2,2}, {0x28faff,4} /*it*/
+        };
+        auto const &fan=fancies[fancy-1];
+        style.m_dropCapLines=fan.m_lines;
+        style.m_dropCapLetters=fan.m_letters;
+        style.m_dropCapColor=fan.m_color;
+      }
+      else if (fancy)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: find unknown fancy character=%x, ignored\n", fancy));
       }
     }
     if (1+tabPos+3<2*len+1)
