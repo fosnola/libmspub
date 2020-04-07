@@ -360,7 +360,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         cellEnds.push_back(unsigned(actChar)+1); // offset begin at 1...
       if (special==ShapeEnd || isEndShape)
       {
-        unsigned txtId = isEndShape ? textEndToChunkId.find(c)->second : shape;
+        unsigned txtId = isEndShape ? textEndToChunkId.find(c)->second : 65536+shape;
         if (!cellEnds.empty())
         {
           m_collector->setTableCellTextEnds(txtId,cellEnds);
@@ -409,11 +409,12 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
   if (!shapeParas.empty())
   {
+    unsigned textId=65536+shape;
     if (!cellEnds.empty())
-      m_collector->setTableCellTextEnds(shape,cellEnds);
+      m_collector->setTableCellTextEnds(textId,cellEnds);
     if (cellStyleList.size()>1)
-      m_collector->setTableCellTextStyles(shape, cellStyleList);
-    m_collector->addTextString(shapeParas, shape++);
+      m_collector->setTableCellTextStyles(textId, cellStyleList);
+    m_collector->addTextString(shapeParas, textId);
   }
 }
 
@@ -945,7 +946,7 @@ void MSPUBParser97::parseClipPath(librevenge::RVNGInputStream *input, unsigned /
 }
 
 void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
-                                       unsigned numCols, unsigned numRows, unsigned width, unsigned height)
+                                       unsigned textId, unsigned numCols, unsigned numRows, unsigned width, unsigned height)
 {
   if (!numRows || !numCols || numRows>128 || numCols>128)
   {
@@ -997,7 +998,7 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
   ti.m_columnWidthsInEmu.resize(size_t(numCols),width/numCols);
 
   // assume that the text info are parsed with not errors
-  auto const *cellStyles=m_collector->getTableCellTextStyles(seqNum);
+  auto const *cellStyles=m_collector->getTableCellTextStyles(textId);
   if (cellStyles && cellStyles->size()!=numRows*numCols)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: oops, the cell styles size seems bad\n"));
@@ -1086,9 +1087,8 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     if (header.m_type == C_Text && input->tell()+11<=header.m_dataOffset)
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
-      unsigned txtId = readU16(input);
-      auto cIt=m_chunkIdToTextEndMap.find(seqNum);
-      m_collector->addTextShape(cIt!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
+      unsigned txtId = 65536+readU16(input);
+      m_collector->addTextShape(m_chunkIdToTextEndMap.find(seqNum)!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
       auto fl=readU8(input);
       if ((fl>>4)!=1)
       {
@@ -1098,9 +1098,9 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     else if (header.m_type == C_Table && input->tell()+(m_version==2 ? 24 : 32)<=header.m_dataOffset)
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
-      unsigned txtId = readU16(input);
-      auto cIt=m_chunkIdToTextEndMap.find(seqNum);
-      m_collector->addTextShape(cIt!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
+      unsigned txtId = 65536+readU16(input);
+      if (m_chunkIdToTextEndMap.find(seqNum)!=m_chunkIdToTextEndMap.end()) txtId=seqNum;
+      m_collector->addTextShape(txtId, seqNum);
       input->seek(2, librevenge::RVNG_SEEK_CUR); // data size ?
       unsigned numCols = readU16(input);
       if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
@@ -1109,7 +1109,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       unsigned width=readU32(input);
       unsigned height=readU32(input);
       if (numRows && numCols)
-        parseTableInfoData(input, seqNum, header, numCols, numRows, width, height);
+        parseTableInfoData(input, seqNum, header, txtId, numCols, numRows, width, height);
     }
     else if (header.m_type==C_Image || header.m_type==C_OLE)
       parseClipPath(input, seqNum, header);

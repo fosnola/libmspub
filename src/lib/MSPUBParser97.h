@@ -48,7 +48,7 @@ class MSPUBParser97 : public MSPUBParser2k
   void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
-                          unsigned numCols, unsigned numRows, unsigned width, unsigned height);
+                          unsigned textId, unsigned numCols, unsigned numRows, unsigned width, unsigned height);
   void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header);
   void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input) override;
   void getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType);
