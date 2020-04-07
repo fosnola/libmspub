@@ -265,6 +265,18 @@ Color MSPUBParser2k::getColorBy2kIndex(unsigned char index)
 // takes a color reference in 2k format and translates it into 2k2 format that collector understands.
 unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k) const
 {
+  if (m_version==2)
+  {
+    Color c = getColorBy2kHex(ref2k&0xf);
+    double delta=double((ref2k>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
+    unsigned rgb[]=
+    {
+      unsigned((1-delta)*double(c.r)+delta*255),
+      unsigned((1-delta)*double(c.g)+delta*255),
+      unsigned((1-delta)*double(c.b)+delta*255)
+    };
+    return unsigned((rgb[0]) | (rgb[1] << 8) | (rgb[2] << 16));
+  }
   if (m_version==3 && (ref2k>>24)==0x81)
   {
     // v3: find

@@ -669,7 +669,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       m_collector->setShapeType(seqNum, shapeType);
     auto flags=readU16(input);
     if (flags&3)
-      m_collector->setShapeFlip(seqNum, flags&1, flags&2);
+      m_collector->setShapeFlip(seqNum, flags&2, flags&1);
     int rot=(flags>>2)&3;
     if (rot)
       m_collector->setShapeRotation(seqNum,360-90*rot);
@@ -739,47 +739,15 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   }
   if (borderId>=0x8000)
   {
-    if (m_version<=2)
+    for (int i=0; i<numBorders; ++i)
     {
-      for (int i=0; i<numBorders; ++i)
-      {
-        int wh=i==0 ? numBorders-1 : i-1;
-        Color lineColor=getColorBy2kIndex(bColors[wh]&0xf);
-        double delta=double((bColors[wh]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
-        unsigned rgb[]=
-        {
-          unsigned((1-delta)*double(lineColor.r)+delta*255),
-          unsigned((1-delta)*double(lineColor.g)+delta*255),
-          unsigned((1-delta)*double(lineColor.b)+delta*255)
-        };
-        m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[wh]*12700), widths[wh]>0));
-      }
-    }
-    else
-    {
-      for (int i=0; i<numBorders; ++i)
-      {
-        int wh=i==0 ? numBorders-1 : i-1;
-        m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[wh])), unsigned(widths[wh]*12700), widths[wh]>0));
-      }
+      int wh=i==0 ? numBorders-1 : i-1;
+      m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[wh])), unsigned(widths[wh]*12700), widths[wh]>0));
     }
   }
   else if (widths[0]>0)
   {
-    if (m_version<=2)
-    {
-      Color lineColor=getColorBy2kIndex(bColors[0]&0xf);
-      double delta=double((bColors[0]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
-      unsigned rgb[]=
-      {
-        unsigned((1-delta)*double(lineColor.r)+delta*255),
-        unsigned((1-delta)*double(lineColor.g)+delta*255),
-        unsigned((1-delta)*double(lineColor.b)+delta*255)
-      };
-      m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[0]*12700), true));
-    }
-    else
-      m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[0])), unsigned(widths[0]*12700), true));
+    m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[0])), unsigned(widths[0]*12700), true));
     m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
     m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
   }
