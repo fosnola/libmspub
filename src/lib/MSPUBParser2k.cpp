@@ -432,6 +432,8 @@ void MSPUBParser2k::parseClipPath(librevenge::RVNGInputStream *, unsigned, Chunk
 
 bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
 {
+  input->seek(0x4, librevenge::RVNG_SEEK_SET);
+  int contentVersion=int(readU16(input));
   input->seek(0x16, librevenge::RVNG_SEEK_SET);
   unsigned trailerOffset = readU32(input);
   input->seek(trailerOffset, librevenge::RVNG_SEEK_SET);
@@ -566,6 +568,17 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     }
   }
 
+  // first, find the file version
+  if (!m_documentChunkIndex)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:No document chunk found.\n"));
+    return false;
+  }
+  auto const &docChunk=m_contentChunks[m_documentChunkIndex.get()];
+  input->seek(long(docChunk.offset)+2, librevenge::RVNG_SEEK_SET);
+  int docChunkSize=int(readU8(input));
+  updateVersion(docChunkSize, contentVersion);
+
   // parse the text bullet and the text content
   if (bulletChunkIndex)
     parseBulletDefinitions(m_contentChunks.at(*bulletChunkIndex), input);
@@ -661,6 +674,24 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   return true;
 }
 
+void MSPUBParser2k::updateVersion(int docChunkSize, int contentVersion)
+{
+  // 2: 5e, 3: 78, 97: 9e, 98: d2, 2000: de
+  if (docChunkSize==0xd2)
+    m_version=5;
+  else if (docChunkSize==0xde)
+    m_version=6;
+  else
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::updateVersion: find unknown size=%d\n", docChunkSize));
+    m_version=docChunkSize>0xd2 ? 6 : 5;
+  }
+  if (contentVersion!=300)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::updateVersion: find unexpected content version=%d\n", contentVersion));
+  }
+}
+
 bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
 {
   if (bool(m_documentChunkIndex))
@@ -668,11 +699,6 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
     auto const &chunk=m_contentChunks[m_documentChunkIndex.get()];
     ChunkHeader2k header;
     parseChunkHeader(chunk,input,header);
-    // changeme: we must find the version before...
-    if (m_version==5 && header.m_maxHeaderSize>0xd2) // 2: 5e, 3: 78, 97: 9e, 98: d2, 2000: de
-      m_version=6;
-    else if (m_version==3 && header.m_maxHeaderSize==0x9e)
-      m_version=4;
     if (header.headerLength()>=28)   // size 54|6a|b2
     {
       input->seek(header.m_beginOffset+0x12, librevenge::RVNG_SEEK_SET);

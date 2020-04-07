@@ -47,6 +47,26 @@ bool MSPUBParser97::parse()
   return m_collector->go();
 }
 
+void MSPUBParser97::updateVersion(int docChunkSize, int contentVersion)
+{
+  // 2: 5e, 3: 78, 97: 9e, 98: d2, 2000: de
+  if (docChunkSize==0x5e)
+    m_version=2;
+  else if (docChunkSize==0x78)
+    m_version=3;
+  else if (docChunkSize==0x9e)
+    m_version=4;
+  else
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::updateVersion: find unknown size=%d\n", docChunkSize));
+    m_version=(contentVersion<=200) ? 2 : 4;
+  }
+  if (contentVersion!=(m_version==2 ? 200 : 300))
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::updateVersion: find unexpected content version=%d\n", contentVersion));
+  }
+}
+
 bool MSPUBParser97::parseTextListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header)
 {
   if (!parseListHeader(input, endPos, header, false)) return false;
@@ -193,22 +213,13 @@ void MSPUBParser97::parseBulletDefinitions(const ContentChunkReference &chunk, l
 
 void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *input)
 {
-  input->seek(0x12, librevenge::RVNG_SEEK_SET);
-  unsigned blockStart=readU32(input);
-  input->seek(blockStart+4, librevenge::RVNG_SEEK_SET);
-  unsigned version=readU16(input);
-  if (version>=200 && version<300) m_version=2; // mspub 2
-  else if (version>=300) m_version=3; // mspub 3 or mspub 97
-  else   // assume mspub 2
-  {
-    m_version=2;
-    MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: oops find version=%d, assume v2\n", int(version)));
-  }
   // set the default parameter
   CharacterStyle defaultCharStyle;
   defaultCharStyle.textSizeInPt=10;
   m_collector->addDefaultCharacterStyle(defaultCharStyle);
 
+  input->seek(0x12, librevenge::RVNG_SEEK_SET);
+  unsigned blockStart=readU32(input);
   input->seek(blockStart+14, librevenge::RVNG_SEEK_SET);
   unsigned textStart = readU32(input);
   unsigned textEnd = readU32(input);

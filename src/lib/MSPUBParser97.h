@@ -24,16 +24,6 @@ class MSPUBParser97 : public MSPUBParser2k
 {
   enum What { LineEnd, ShapeEnd, FieldBegin, CellEnd };
 
-  struct SpanInfo97
-  {
-    unsigned m_spanEnd;
-    CharacterStyle m_style;
-    SpanInfo97(unsigned spanEnd, const CharacterStyle &style)
-      : m_spanEnd(spanEnd), m_style(style)
-    {
-    }
-  };
-
   bool parseTextListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header);
   bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
                        std::vector<CharacterStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
@@ -43,6 +33,8 @@ class MSPUBParser97 : public MSPUBParser2k
                        std::vector<CellStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
   CharacterStyle readCharacterStyle(librevenge::RVNGInputStream *input,
                                     unsigned length);
+
+  void updateVersion(int docChunkSize, int contentVersion) override;
   void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,

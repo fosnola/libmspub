@@ -103,9 +103,6 @@ private:
   std::set<unsigned> m_shapesAlreadySend;
 
 protected:
-  // CHANGEME: actually, MSPUBParser97::parseContentsTextIfNecessary
-  // set version to 2[v2] or 3[v3-98] ; finally
-  // MSPUBParser2k::parseDocument differentiate v3-97, and 98-2000
   unsigned m_version; // v2:2, v3:3, 97:4, 98:5, 2000:6
   bool m_isBanner;
   std::map<unsigned, unsigned> m_chunkIdToTextEndMap;
@@ -116,9 +113,9 @@ protected:
   bool parse2kShapeChunk(ContentChunkReference const &chunk, librevenge::RVNGInputStream *input,
                          boost::optional<unsigned> pageSeqNum = boost::optional<unsigned>(),
                          bool topLevelCall = true);
-  void parseShapeLine(librevenge::RVNGInputStream *input, bool isRectangle, unsigned offset, unsigned seqNum);
   void parseChunkHeader(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
                         ChunkHeader2k &header);
+  virtual void updateVersion(int docChunkSize, int contentVersion);
   virtual void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
   virtual void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
   void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
@@ -127,10 +124,7 @@ protected:
                                   unsigned textId, unsigned numCols, unsigned numRows, unsigned width, unsigned height);
   virtual void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header);
 
-  void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
-                       unsigned chunkOffset);
   bool parseGroup(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned page);
-  void parseShapeFill(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
   bool parseBorderArts(librevenge::RVNGInputStream *input);
   bool parseContents(librevenge::RVNGInputStream *input) override;
   bool parseDocument(librevenge::RVNGInputStream *input);
@@ -138,11 +132,6 @@ protected:
   bool parsePage(librevenge::RVNGInputStream *input, unsigned seqNum);
   unsigned getColorIndexByQuillEntry(unsigned entry) override;
   int translateCoordinateIfNecessary(int coordinate) const;
-  virtual unsigned getFirstLineOffset() const;
-  virtual unsigned getSecondLineOffset() const;
-  virtual unsigned getShapeFillTypeOffset() const;
-  virtual unsigned getShapeFillColorOffset() const;
-  virtual unsigned getTextIdOffset() const;
   static Color getColorBy2kIndex(unsigned char index);
   static Color getColorBy2kHex(unsigned hex);
   unsigned translate2kColorReference(unsigned ref2k) const;
@@ -152,6 +141,17 @@ protected:
   bool parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition);
   bool parseIdList(librevenge::RVNGInputStream *input, unsigned long endPos, std::vector<unsigned> &ids);
   bool parseBorderArt(librevenge::RVNGInputStream *input, unsigned borderNum, unsigned endPos);
+
+  // old code remove me
+  void parseShapeLine(librevenge::RVNGInputStream *input, bool isRectangle, unsigned offset, unsigned seqNum);
+  void parseShapeFill(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
+  void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
+                       unsigned chunkOffset);
+  unsigned getFirstLineOffset() const;
+  unsigned getSecondLineOffset() const;
+  unsigned getShapeFillTypeOffset() const;
+  unsigned getShapeFillColorOffset() const;
+  unsigned getTextIdOffset() const;
 public:
   explicit MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector);
   bool parse() override;
