@@ -976,8 +976,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
               const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[tableLayout[row][col].m_cell];
               for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
               {
-                librevenge::RVNGPropertyList paraProps = getParaStyleProps(text[para].style, text[para].style.m_defaultCharStyleIndex);
-                openTextLine(state, paraProps, text[para].style.m_listInfo);
+                openTextLine(state, text[para].style);
                 auto const &paraLetterSpacing=text[para].style.m_letterSpacingInPt;
 
                 for (size_t i_spans = 0; i_spans < paraTexts[para].size(); ++i_spans)
@@ -1049,8 +1048,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       for (size_t i=0; i<text.size(); ++i)
       {
         const auto &line = text[i];
-        librevenge::RVNGPropertyList paraProps = getParaStyleProps(line.style, line.style.m_defaultCharStyleIndex);
-        openTextLine(state, paraProps, line.style.m_listInfo);
+        openTextLine(state, line.style);
         auto const &paraLetterSpacing=line.style.m_letterSpacingInPt;
 
         for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
@@ -1084,8 +1082,10 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   return &no_op;
 }
 
-void MSPUBCollector::openTextLine(TextLineState &state, librevenge::RVNGPropertyList const &lineProps, boost::optional<ListInfo> const &list) const
+void MSPUBCollector::openTextLine(TextLineState &state, const ParagraphStyle &paraStyle) const
 {
+  librevenge::RVNGPropertyList lineProps=getParaStyleProps(paraStyle, paraStyle.m_defaultCharStyleIndex);
+  auto const &list=paraStyle.m_listInfo;
   if (!list)
   {
     if (state.m_list) closeTextList(state);
@@ -1097,6 +1097,8 @@ void MSPUBCollector::openTextLine(TextLineState &state, librevenge::RVNGProperty
   {
     librevenge::RVNGPropertyList level;
     list->addTo(level);
+    if (paraStyle.m_firstLineIndentEmu && *paraStyle.m_firstLineIndentEmu<0)
+      level.insert("text:min-label-width", -(double)*paraStyle.m_firstLineIndentEmu / EMUS_IN_INCH);
     if (list->m_listType==ORDERED)
       m_painter->openOrderedListLevel(level);
     else
@@ -1618,13 +1620,17 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
   {
     ret.insert("fo:margin-top", (double)spaceBeforeEmu / EMUS_IN_INCH);
   }
-  if (firstLineIndentEmu != 0)
+  if (style.m_listInfo)
   {
-    ret.insert("fo:text-indent", (double)firstLineIndentEmu / EMUS_IN_INCH);
+    if (firstLineIndentEmu+int(leftIndentEmu)!=0)
+      ret.insert("fo:margin-left", (double)(firstLineIndentEmu+int(leftIndentEmu)) / EMUS_IN_INCH);
   }
-  if (leftIndentEmu != 0)
+  else
   {
-    ret.insert("fo:margin-left", (double)leftIndentEmu / EMUS_IN_INCH);
+    if (firstLineIndentEmu != 0)
+      ret.insert("fo:text-indent", (double)firstLineIndentEmu / EMUS_IN_INCH);
+    if (leftIndentEmu != 0)
+      ret.insert("fo:margin-left", (double)leftIndentEmu / EMUS_IN_INCH);
   }
   if (rightIndentEmu != 0)
   {
