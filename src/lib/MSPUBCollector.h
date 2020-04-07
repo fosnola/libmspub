@@ -139,6 +139,8 @@ private:
   MSPUBCollector(const MSPUBCollector &);
   MSPUBCollector &operator=(const MSPUBCollector &);
 
+  bool paintBorderArts(ShapeInfo const &info, Coordinate const &coord) const;
+
   librevenge::RVNGDrawingInterface *m_painter;
   std::list<ContentChunkReference> m_contentChunkReferences;
   double m_width, m_height;

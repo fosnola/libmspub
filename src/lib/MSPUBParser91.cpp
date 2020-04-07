@@ -1034,6 +1034,7 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       }
       unsigned newId=offsetToImage.size();
       m_collector->setBorderImageOffset(i,newId);
+      if (off==0) m_collector->setShapeStretchBorderArt(i);
       offsetToImage[decal[off]]=newId;
     }
   }

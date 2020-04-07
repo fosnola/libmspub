@@ -836,213 +836,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   if (hasStroke)
   {
     if (hasBorderArt && lines[0].m_widthInEmu > 0)
-    {
-      bool stretch = info.m_stretchBorderArt;
-      double x = coord.getXIn(m_width);
-      double y = coord.getYIn(m_height);
-      double height = coord.getHeightIn();
-      double width = coord.getWidthIn();
-      double borderImgWidth =
-        static_cast<double>(info.m_lines[0].m_widthInEmu) / EMUS_IN_INCH;
-      auto numImagesHoriz = static_cast<unsigned>(width / borderImgWidth);
-      auto numImagesVert = static_cast<unsigned>(height / borderImgWidth);
-      double borderVertTotalPadding = height - numImagesVert * borderImgWidth;
-      double borderHorizTotalPadding = width - numImagesHoriz * borderImgWidth;
-      if (numImagesHoriz >= 2 && numImagesVert >= 2)
-      {
-        auto numStretchedImagesVert = static_cast<unsigned>(0.5 + (height - 2 * borderImgWidth) / borderImgWidth);
-        auto numStretchedImagesHoriz = static_cast<unsigned>(0.5 + (width - 2 * borderImgWidth) / borderImgWidth);
-        double stretchedImgHeight = stretch ?
-                                    (height - 2 * borderImgWidth) / numStretchedImagesVert :
-                                    borderImgWidth;
-        double stretchedImgWidth = stretch ?
-                                   (width - 2 * borderImgWidth) / numStretchedImagesHoriz :
-                                   borderImgWidth;
-        if (stretch)
-        {
-          numImagesVert = 2 + numStretchedImagesVert;
-          numImagesHoriz = 2 + numStretchedImagesHoriz;
-        }
-        double borderVertPadding = borderVertTotalPadding / (numImagesVert - 1);
-        double borderHorizPadding = borderHorizTotalPadding / (numImagesHoriz - 1);
-        if (maybeBorderImg.get() < m_borderImages.size())
-        {
-          const BorderArtInfo &ba = m_borderImages[maybeBorderImg.get()];
-          if (!ba.m_offsets.empty())
-          {
-            librevenge::RVNGPropertyList baProps;
-            baProps.insert("draw:stroke", "none");
-            baProps.insert("draw:fill", "solid");
-            baProps.insert("draw:fill-color", "#ffffff");
-            m_painter->setStyle(baProps);
-            librevenge::RVNGPropertyList topRectProps;
-            topRectProps.insert("svg:x", x);
-            topRectProps.insert("svg:y", y);
-            topRectProps.insert("svg:height", borderImgWidth);
-            topRectProps.insert("svg:width", width);
-            m_painter->drawRectangle(topRectProps);
-            librevenge::RVNGPropertyList rightRectProps;
-            rightRectProps.insert("svg:x", x + width - borderImgWidth);
-            rightRectProps.insert("svg:y", y);
-            rightRectProps.insert("svg:height", height);
-            rightRectProps.insert("svg:width", borderImgWidth);
-            m_painter->drawRectangle(rightRectProps);
-            librevenge::RVNGPropertyList botRectProps;
-            botRectProps.insert("svg:x", x);
-            botRectProps.insert("svg:y", y + height - borderImgWidth);
-            botRectProps.insert("svg:height", borderImgWidth);
-            botRectProps.insert("svg:width", width);
-            m_painter->drawRectangle(botRectProps);
-            librevenge::RVNGPropertyList leftRectProps;
-            leftRectProps.insert("svg:x", x);
-            leftRectProps.insert("svg:y", y);
-            leftRectProps.insert("svg:height", height);
-            leftRectProps.insert("svg:width", borderImgWidth);
-            m_painter->drawRectangle(leftRectProps);
-            auto iOffset = ba.m_offsets.begin();
-            boost::optional<Color> oneBitColor;
-            if (bool(info.m_lineBackColor))
-            {
-              oneBitColor = info.m_lineBackColor.get().getFinalColor(m_paletteColors);
-            }
-            // top left
-            unsigned iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                                    ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              writeImage(x, y, borderImgWidth, borderImgWidth,
-                         bi.m_type, bi.m_imgBlob, oneBitColor);
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // top
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              for (unsigned iTop = 1; iTop < numImagesHoriz - 1; ++iTop)
-              {
-                double imgX = stretch ?
-                              x + borderImgWidth + (iTop - 1) * stretchedImgWidth :
-                              x + iTop * (borderImgWidth + borderHorizPadding);
-                writeImage(imgX, y,
-                           borderImgWidth, stretchedImgWidth,
-                           bi.m_type, bi.m_imgBlob, oneBitColor);
-              }
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // top right
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              writeImage(x + width - borderImgWidth, y,
-                         borderImgWidth, borderImgWidth,
-                         bi.m_type, bi.m_imgBlob, oneBitColor);
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // right
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              for (unsigned iRight = 1; iRight < numImagesVert - 1; ++iRight)
-              {
-                double imgY = stretch ?
-                              y + borderImgWidth + (iRight - 1) * stretchedImgHeight :
-                              y + iRight * (borderImgWidth + borderVertPadding);
-                writeImage(x + width - borderImgWidth,
-                           imgY,
-                           stretchedImgHeight, borderImgWidth,
-                           bi.m_type, bi.m_imgBlob, oneBitColor);
-              }
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // bottom right
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              writeImage(x + width - borderImgWidth,
-                         y + height - borderImgWidth,
-                         borderImgWidth, borderImgWidth,
-                         bi.m_type, bi.m_imgBlob, oneBitColor);
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // bottom
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              for (unsigned iBot = 1; iBot < numImagesHoriz - 1; ++iBot)
-              {
-                double imgX = stretch ?
-                              x + width - borderImgWidth - iBot * stretchedImgWidth :
-                              x + width - borderImgWidth - iBot * (borderImgWidth + borderHorizPadding);
-                writeImage(
-                  imgX, y + height - borderImgWidth,
-                  borderImgWidth, stretchedImgWidth,
-                  bi.m_type, bi.m_imgBlob, oneBitColor);
-              }
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // bottom left
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              writeImage(x, y + height - borderImgWidth,
-                         borderImgWidth, borderImgWidth,
-                         bi.m_type, bi.m_imgBlob, oneBitColor);
-            }
-            if (iOffset + 1 != ba.m_offsets.end())
-            {
-              ++iOffset;
-            }
-            // left
-            iOrdOff = find(ba.m_offsetsOrdered.begin(),
-                           ba.m_offsetsOrdered.end(), *iOffset) - ba.m_offsetsOrdered.begin();
-            if (iOrdOff < ba.m_images.size())
-            {
-              const BorderImgInfo &bi = ba.m_images[iOrdOff];
-              for (unsigned iLeft = 1; iLeft < numImagesVert - 1; ++iLeft)
-              {
-                double imgY = stretch ?
-                              y + height - borderImgWidth - iLeft * stretchedImgHeight :
-                              y + height - borderImgWidth -
-                              iLeft * (borderImgWidth + borderVertPadding);
-                writeImage(x, imgY, stretchedImgHeight, borderImgWidth,
-                           bi.m_type, bi.m_imgBlob, oneBitColor);
-              }
-            }
-          }
-        }
-      }
-    }
+      paintBorderArts(info, coord);
     else
     {
       Coordinate strokeCoord = isShapeTypeRectangle(type) ?
@@ -1262,6 +1056,118 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     m_painter->endLayer();
   }
   return &no_op;
+}
+
+bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &coord) const
+{
+  double x = coord.getXIn(m_width);
+  double y = coord.getYIn(m_height);
+  double height = coord.getHeightIn();
+  double width = coord.getWidthIn();
+  if (!info.m_borderImgIndex || *info.m_borderImgIndex >= m_borderImages.size() || // no image
+      m_borderImages[*info.m_borderImgIndex].m_offsets.empty() || // no offset
+      info.m_lines.empty() || info.m_lines[0].m_widthInEmu <= 0 || // no border
+      height<=0 || width<=0) // empty form
+    return false;
+
+  double borderImgWidth = static_cast<double>(info.m_lines[0].m_widthInEmu) / EMUS_IN_INCH;
+  auto numImagesHoriz = static_cast<unsigned>(width / borderImgWidth);
+  auto numImagesVert = static_cast<unsigned>(height / borderImgWidth);
+  if (numImagesHoriz<2 || numImagesVert<2)
+  {
+    borderImgWidth /=2;
+    numImagesHoriz = static_cast<unsigned>(width / borderImgWidth);
+    numImagesVert = static_cast<unsigned>(height / borderImgWidth);
+  }
+  if (numImagesHoriz<2 || numImagesVert<2) return false;
+
+  boost::optional<Color> oneBitColor;
+  if (bool(info.m_lineBackColor))
+    oneBitColor = info.m_lineBackColor.get().getFinalColor(m_paletteColors);
+  const BorderArtInfo &ba = m_borderImages[*info.m_borderImgIndex];
+  size_t numOffset=ba.m_offsets.size();
+  librevenge::RVNGPropertyList whiteProps;
+  whiteProps.insert("draw:stroke", "none");
+  whiteProps.insert("draw:fill", "solid");
+  whiteProps.insert("draw:fill-color", "#ffffff");
+  m_painter->setStyle(whiteProps);
+  bool stretch = info.m_stretchBorderArt;
+  double xLimits[]= {x, x+width-borderImgWidth};
+  double yLimits[]= {y, y+height-borderImgWidth};
+  for (int axis=0; axis<2; ++axis)
+  {
+    double const &length = axis==0 ? width : height;
+    auto num = axis == 0 ? numImagesHoriz-2 : numImagesVert-2;
+    double imageWidth=borderImgWidth;
+    if (stretch && num)
+    {
+      num=static_cast<unsigned>((0.5 + length) / borderImgWidth)-2; // num is bigger than 0.5 by definition
+      imageWidth=(length-2*borderImgWidth)/double(num);
+    }
+    else if (num)
+    {
+      double stretchWidth=(length-2*borderImgWidth)/double(num);
+      if (stretchWidth>borderImgWidth-2./72. && stretchWidth<borderImgWidth+2./72.)
+        imageWidth=stretchWidth;
+    }
+    double totalPadding=length-2*borderImgWidth-num*imageWidth;
+    double padding=totalPadding/(num+1);
+    if (padding<1.e-4) padding=0;
+    if (padding<=0 && num<=0) continue;
+    bool needImage=padding>0 || oneBitColor;
+    for (int b=0; b<2; ++b)
+    {
+      size_t offset=(axis==0 ? 1+4*b : 7-4*b);
+      auto const &bi = ba.m_images[offset];
+      double actPos[2]=
+      {
+        axis==0 ? x+borderImgWidth : xLimits[b],
+        axis==1 ? y+borderImgWidth : yLimits[b]
+      };
+      double const imageSizes[2] =
+      {
+        axis==0 ? imageWidth : borderImgWidth,
+        axis==1 ? imageWidth : borderImgWidth
+      };
+      if (needImage) // first clean
+        m_painter->setStyle(whiteProps);
+      else
+      {
+        librevenge::RVNGPropertyList list;
+        list.insert("draw:stroke", "none");
+        list.insert("draw:fill", "bitmap");
+        list.insert("draw:fill-image", bi.m_imgBlob);
+        list.insert("draw:fill-image-width", imageSizes[0]);
+        list.insert("draw:fill-image-height", imageSizes[1]);
+        list.insert("draw:fill-image-ref-point-x",0, librevenge::RVNG_POINT);
+        list.insert("draw:fill-image-ref-point-y",0, librevenge::RVNG_POINT);
+        list.insert("librevenge:mime-type", mimeByImgType(bi.m_type));
+        m_painter->setStyle(list);
+      }
+      librevenge::RVNGPropertyList rectProps;
+      rectProps.insert("svg:x", actPos[0]);
+      rectProps.insert("svg:y", actPos[1]);
+      rectProps.insert("svg:height", axis==0 ? borderImgWidth : length-2*borderImgWidth);
+      rectProps.insert("svg:width", axis==1 ? borderImgWidth : length-2*borderImgWidth);
+      m_painter->drawRectangle(rectProps);
+      if (!needImage) continue;
+      actPos[axis]+=padding;
+      for (unsigned i=0; i<num; ++i)
+      {
+        writeImage(actPos[0], actPos[1], imageSizes[0], imageSizes[1],
+                   bi.m_type, bi.m_imgBlob, oneBitColor);
+        actPos[axis]+=padding+imageSizes[axis];
+      }
+    }
+  }
+  for (size_t b=0; b<4; ++b)   // now send the 4 borders
+  {
+    size_t offset=2*b<numOffset ? ba.m_offsets[2*b] : ba.m_offsets.back();
+    auto const &bi = ba.m_images[offset];
+    writeImage((b==0 || b==3) ? x : x+width-borderImgWidth, (b==0 || b==1) ? y : y+height-borderImgWidth,
+               borderImgWidth, borderImgWidth, bi.m_type, bi.m_imgBlob, oneBitColor);
+  }
+  return true;
 }
 
 const char *MSPUBCollector::getCalculatedEncoding() const
