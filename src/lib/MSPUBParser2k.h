@@ -20,7 +20,6 @@
 namespace libmspub
 {
 class ColorReference;
-struct ListHeader2k;
 
 class MSPUBParser2k : public MSPUBParser
 {
@@ -64,6 +63,31 @@ public:
     unsigned m_endOffset;
     unsigned m_flagOffset; // removeme
   };
+  struct ListHeader2k
+  {
+    ListHeader2k()
+      : m_dataOffset(0)
+      , m_N(0)
+      , m_maxN(0)
+      , m_dataSize(0)
+      , m_positions()
+    {
+      for (auto &v : m_values) v=0;
+    }
+    //! the data begin offset
+    unsigned m_dataOffset;
+    //! the number of data
+    int m_N;
+    //! the maximum data
+    int m_maxN;
+    //! the data size (or the last position)
+    int m_dataSize;
+    //! two unknown value
+    int m_values[2];
+    //! the position
+    std::vector<unsigned> m_positions;
+  };
+
 private:
   std::vector<unsigned> m_imageDataChunkIndices;
   std::vector<unsigned> m_oleDataChunkIndices;
@@ -85,6 +109,7 @@ protected:
   void parseShapeLine(librevenge::RVNGInputStream *input, bool isRectangle, unsigned offset, unsigned seqNum);
   void parseChunkHeader(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
                         ChunkHeader2k &header);
+  virtual void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
   virtual void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                 ChunkHeader2k const &header);
   void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,

@@ -19,6 +19,9 @@ namespace libmspub
 {
 void ListInfo::addTo(librevenge::RVNGPropertyList &level) const
 {
+  /*if (m_fontSize)
+    level.insert("fo:font-size", *m_fontSize, librevenge::RVNG_POINT);
+    else */
   level.insert("fo:font-size", 1, librevenge::RVNG_PERCENT);
   if (m_listType==ORDERED)
   {
@@ -93,6 +96,11 @@ void ListInfo::addTo(librevenge::RVNGPropertyList &level) const
   else
   {
     unsigned bulletChar=m_bulletChar.get_value_or(0x2022);
+    if (bulletChar<0x20 && bulletChar!=0x9)
+    {
+      MSPUB_DEBUG_MSG(("ListInfo::addTo: bad bullet, reset to default bullet\n"));
+      bulletChar=0x2022;
+    }
     librevenge::RVNGString bullet;
     appendUCS4(bullet, bulletChar);
     level.insert("text:bullet-char", bullet);
@@ -102,6 +110,8 @@ void ListInfo::addTo(librevenge::RVNGPropertyList &level) const
 bool ListInfo::isCompatibleWith(ListInfo const &listInfo) const
 {
   if (m_listType!=listInfo.m_listType) return false;
+  if (bool(m_fontSize)!=bool(listInfo.m_fontSize)) return false;
+  if (m_fontSize && (*m_fontSize<*listInfo.m_fontSize||*m_fontSize>*listInfo.m_fontSize)) return false;
   if (m_listType==ORDERED)
   {
     if (bool(m_numberingType)!=bool(listInfo.m_numberingType)) return false;

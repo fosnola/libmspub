@@ -27,31 +27,6 @@
 namespace libmspub
 {
 
-struct ListHeader2k
-{
-  ListHeader2k()
-    : m_dataOffset(0)
-    , m_N(0)
-    , m_maxN(0)
-    , m_dataSize(0)
-    , m_positions()
-  {
-    for (auto &v : m_values) v=0;
-  }
-  //! the data begin offset
-  unsigned m_dataOffset;
-  //! the number of data
-  int m_N;
-  //! the maximum data
-  int m_maxN;
-  //! the data size (or the last position)
-  int m_dataSize;
-  //! two unknown value
-  int m_values[2];
-  //! the position
-  std::vector<unsigned> m_positions;
-};
-
 MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector)
   : MSPUBParser(input, collector)
   , m_imageDataChunkIndices()
@@ -381,16 +356,18 @@ void MSPUBParser2k::parseContentsTextIfNecessary(librevenge::RVNGInputStream *)
 {
 }
 
+void MSPUBParser2k::parseBulletDefinitions(const ContentChunkReference &, librevenge::RVNGInputStream *)
+{
+}
+
 bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
 {
-  parseContentsTextIfNecessary(input);
-  parseMetaData();
-
   input->seek(0x16, librevenge::RVNG_SEEK_SET);
   unsigned trailerOffset = readU32(input);
   input->seek(trailerOffset, librevenge::RVNG_SEEK_SET);
   unsigned numBlocks = readU16(input);
   std::set<unsigned> offsetsSet;
+  boost::optional<unsigned> bulletChunkIndex;
   for (unsigned i = 0; i < numBlocks; ++i)
   {
     input->seek(input->tell() + 2, librevenge::RVNG_SEEK_SET);
@@ -472,10 +449,13 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0027:
-      // TODO: read the child image and add it to the master's background...
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found special paper chunk 0x%x, ignored\n", id));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
       m_specialPaperChunkIndex=id;
+      break;
+    case 0x0028:
+      m_contentChunks.push_back(ContentChunkReference(BULLET_DEFINITION, chunkOffset, 0, id, parent));
+      bulletChunkIndex=chunkId;
       break;
     default:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found unknown chunk of id 0x%x and parent 0x%x\n", id, parent));
@@ -505,6 +485,13 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:can not find limit for chunk %x.\n", chunk.seqNum));
     }
   }
+
+  // parse the text bullet and the text content
+  if (bulletChunkIndex)
+    parseBulletDefinitions(m_contentChunks.at(*bulletChunkIndex), input);
+  parseContentsTextIfNecessary(input);
+  // parse the meta data
+  parseMetaData();
 
   // parse the main chunk
   if (!parseDocument(input))
@@ -700,6 +687,7 @@ bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
       continue;
     }
     ListHeader2k listHeader;
+    input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
     if (!parseListHeader(input, chunk.end, listHeader, true))
       continue;
     auto const &pos=listHeader.m_positions;

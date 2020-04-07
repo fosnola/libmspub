@@ -16,6 +16,7 @@
 
 namespace libmspub
 {
+struct ListInfo;
 class MSPUBParser97 : public MSPUBParser2k
 {
   enum What { LineEnd, ShapeEnd, FieldBegin, CellEnd };
@@ -44,11 +45,15 @@ class MSPUBParser97 : public MSPUBParser2k
                             std::vector<ParagraphStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
   CharacterStyle readCharacterStyle(librevenge::RVNGInputStream *input,
                                     unsigned length);
+  void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input) override;
   void getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType);
 public:
   MSPUBParser97(librevenge::RVNGInputStream *input, MSPUBCollector *collector);
   bool parse() override;
+
+protected:
+  std::vector<ListInfo> m_bulletLists;
 };
 }
 

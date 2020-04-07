@@ -27,12 +27,18 @@ enum ListType
 struct ListInfo
 {
   ListType m_listType;
+  //! the font size in point
+  boost::optional<double> m_fontSize;
 
   //unordered list stuff
   boost::optional<unsigned> m_bulletChar; // in unicode
-  ListInfo(unsigned bulletChar) : m_listType(UNORDERED),
-    m_bulletChar(bulletChar), m_numberIfRestarted(),
-    m_numberingType(), m_numberingDelimiter()
+  ListInfo(unsigned bulletChar)
+    : m_listType(UNORDERED)
+    , m_fontSize()
+    , m_bulletChar(bulletChar)
+    , m_numberIfRestarted()
+    , m_numberingType()
+    , m_numberingDelimiter()
   {
   }
 
@@ -42,9 +48,12 @@ struct ListInfo
   boost::optional<NumberingDelimiter> m_numberingDelimiter;
   ListInfo(boost::optional<unsigned> numberIfRestarted, NumberingType numberingType,
            NumberingDelimiter numberingDelimiter)
-    : m_listType(ORDERED), m_bulletChar(),
-      m_numberIfRestarted(numberIfRestarted), m_numberingType(numberingType),
-      m_numberingDelimiter(numberingDelimiter)
+    : m_listType(ORDERED)
+    , m_fontSize()
+    , m_bulletChar()
+    , m_numberIfRestarted(numberIfRestarted)
+    , m_numberingType(numberingType)
+    , m_numberingDelimiter(numberingDelimiter)
   {
   }
 
