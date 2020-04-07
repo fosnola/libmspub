@@ -1117,7 +1117,7 @@ bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &co
     for (int b=0; b<2; ++b)
     {
       size_t offset=(axis==0 ? 1+4*b : 7-4*b);
-      auto const &bi = ba.m_images[offset];
+      auto const &bi = offset<ba.m_images.size() ? ba.m_images[offset] : ba.m_images.back();
       double actPos[2]=
       {
         axis==0 ? x+borderImgWidth : xLimits[b],

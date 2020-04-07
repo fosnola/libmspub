@@ -399,31 +399,28 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
     unsigned short typeMarker = readU16(input);
     input->seek(offset, librevenge::RVNG_SEEK_SET);
+    m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
     switch (typeMarker)
     {
     case 0x0014:
       MSPUB_DEBUG_MSG(("Found page chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(PAGE, chunkOffset, 0, id, parent));
       m_pageChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     case 0x0015:
       MSPUB_DEBUG_MSG(("Found document chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(DOCUMENT, chunkOffset, 0, id, parent));
       m_documentChunkIndex = unsigned(m_contentChunks.size() - 1);
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     case 0x0002:
       MSPUB_DEBUG_MSG(("Found image_2k chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     case 0x0021:
       MSPUB_DEBUG_MSG(("Found image_2k_data chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K_DATA, chunkOffset, 0, id, parent));
       m_imageDataChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     case 0x0000:
     case 0x0004:
@@ -434,25 +431,27 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       MSPUB_DEBUG_MSG(("Found shape chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(SHAPE, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     case 0x0047:
       MSPUB_DEBUG_MSG(("Found palette chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(PALETTE, chunkOffset, 0, id, parent));
       m_paletteChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
+    case 0x001F:
+      MSPUB_DEBUG_MSG(("Found borderArt chunk of id 0x%x and parent 0x%x\n", id, parent));
+      m_contentChunks.push_back(ContentChunkReference(BORDER_ART, chunkOffset, 0, id, parent));
+      m_borderArtChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      break;
+    case 0x000E:
     case 0x000F:
       MSPUB_DEBUG_MSG(("Found group chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(GROUP, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     default:
       MSPUB_DEBUG_MSG(("Found unknown chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
       m_unknownChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
-      m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size() - 1));
       break;
     }
   }
@@ -480,6 +479,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_collector->addPaletteColor(color);
     }
   }
+  parseBorderArts(input);
 
   for (unsigned int imageDataChunkIndex : m_imageDataChunkIndices)
   {
@@ -546,6 +546,99 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
   return false;
 }
 
+bool MSPUBParser2k::parseBorderArts(librevenge::RVNGInputStream *input)
+{
+  if (m_borderArtChunkIndices.size()!=1)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArts: unexpected number of border arts\n"));
+    return false;
+  }
+  auto const &chunk=m_contentChunks[m_borderArtChunkIndices[0]];
+  ChunkHeader2k header;
+  parseChunkHeader(chunk,input,header);
+  if (!header.hasData())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArts: can not find the data block\n"));
+    return false;
+  }
+  if (m_version>=5) // FIXME
+    return true;
+  input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+  ListHeader2k listHeader;
+  if (!parseListHeader(input, chunk.end, listHeader, true))
+    return false;
+  std::set<unsigned> listPos(listHeader.m_positions.begin(), listHeader.m_positions.end());
+  listPos.insert(header.m_endOffset);
+  for (size_t p=0; p+1<listHeader.m_positions.size(); ++p)
+  {
+    if (listHeader.m_positions[p]>=header.m_endOffset) continue;
+    auto it=listPos.find(listHeader.m_positions[p]);
+    if (it==listPos.end() || ++it==listPos.end())
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArts: can not find the end position for art=%d\n",int(p)));
+      continue;
+    }
+    input->seek(listHeader.m_positions[p], librevenge::RVNG_SEEK_SET);
+    parseBorderArt(input, p, *it);
+  }
+  return true;
+}
+
+bool MSPUBParser2k::parseBorderArt(librevenge::RVNGInputStream *input, unsigned borderNum, unsigned endPos)
+{
+  auto begPos=input->tell();
+  if (begPos+66+4>endPos)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArt: art zone %d seems to short\n",int(borderNum)));
+    return false;
+  }
+  input->seek(begPos+50, librevenge::RVNG_SEEK_SET);
+  unsigned decal[8];
+  for (auto &d : decal) d = readU16(input);
+  std::map<unsigned, unsigned> offsetToImage;
+  for (int off=0; off<8; ++off)
+  {
+    auto oIt=offsetToImage.find(decal[off]);
+    if (oIt!=offsetToImage.end())
+    {
+      m_collector->setBorderImageOffset(borderNum,oIt->second);
+      continue;
+    }
+    input->seek(begPos+decal[off], librevenge::RVNG_SEEK_SET);
+    // check that we have a picture
+    unsigned headerVals[2];
+    for (auto &val : headerVals) val=readU16(input);
+    if (headerVals[0]<1 || headerVals[0]>2 || headerVals[1]<9 || headerVals[1]>10)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArt: can not find the wmf picture for art zone %d\n",int(borderNum)));
+      continue;
+    }
+    input->seek(2, librevenge::RVNG_SEEK_CUR);
+    unsigned pictSize=readU32(input);
+    if (pictSize<9 || begPos+decal[off]+2*pictSize>endPos)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArt: art zone %d pictSize seems bad\n",int(borderNum)));
+      continue;
+    }
+    // ok, let save the picure
+    pictSize*=2;
+    input->seek(begPos+decal[off], librevenge::RVNG_SEEK_SET);
+    librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, borderNum));
+    while (pictSize > 0 && stillReading(input, (unsigned long)-1))
+    {
+      unsigned long howManyRead = 0;
+      const unsigned char *buf = input->read(pictSize, howManyRead);
+      img.append(buf, howManyRead);
+      pictSize -= howManyRead;
+    }
+    unsigned newId=offsetToImage.size();
+    m_collector->setBorderImageOffset(borderNum,newId);
+    if (off==0) m_collector->setShapeStretchBorderArt(borderNum);
+    offsetToImage[decal[off]]=newId;
+  }
+  return true;
+}
+
 bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition)
 {
   unsigned start=input->tell();
@@ -560,7 +653,7 @@ bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned
   if (!readPosition)
     header.m_dataSize=readU16(input);
   else
-    input->seek(2, librevenge::RVNG_SEEK_SET);
+    input->seek(2, librevenge::RVNG_SEEK_CUR);
   for (auto &v: header.m_values) v=readU16(input);
   if ((header.m_dataSize && (endPos-header.m_dataOffset)/header.m_dataSize < unsigned(header.m_N)) ||
       (readPosition && endPos-header.m_dataOffset<2*unsigned(header.m_N+1)))

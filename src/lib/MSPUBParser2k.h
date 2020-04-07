@@ -89,6 +89,7 @@ protected:
   bool parseGroup(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned page);
   void assignShapeImgIndex(unsigned seqNum);
   void parseShapeFill(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
+  bool parseBorderArts(librevenge::RVNGInputStream *input);
   bool parseContents(librevenge::RVNGInputStream *input) override;
   bool parseDocument(librevenge::RVNGInputStream *input);
   unsigned getColorIndexByQuillEntry(unsigned entry) override;
@@ -105,6 +106,7 @@ protected:
   static PageType getPageTypeBySeqNum(unsigned seqNum);
   virtual void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input);
   bool parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition);
+  bool parseBorderArt(librevenge::RVNGInputStream *input, unsigned borderNum, unsigned endPos);
 public:
   explicit MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector);
   bool parse() override;

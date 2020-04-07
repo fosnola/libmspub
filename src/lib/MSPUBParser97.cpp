@@ -505,31 +505,59 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: the zone is too small\n"));
     return;
   }
-  input->seek(2, librevenge::RVNG_SEEK_CUR); // flags
-  int colors[3];
-  for (int i=0; i<2; ++i) colors[i]=int(readU8(input));
+  input->seek(2, librevenge::RVNG_SEEK_CUR); // flags: 40=selected, 1=shadow
+  int colors[2];
+  for (auto &c : colors) c=int(readU8(input));
   int patternId=int(readU8(input));
-  colors[2]=int(readU8(input));
-  auto val=readU8(input);
-  double width=(val&0x80) ? double(val&0x7f)/4 : double(val);
-  int borderId=int(readS16(input));
-  unsigned flags=0; // FINDME
-  if (width>0)
+  int numBorders=1;
+  int bColors[4];
+  double widths[4];
+  bColors[0]=int(readU8(input));
+  auto w=readU8(input);
+  widths[0]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+  input->seek(2,librevenge::RVNG_SEEK_CUR);
+  int borderId=0xfffe; // none
+  if (header.isRectangle())
   {
-    Color lineColor=getColorBy2kIndex(colors[2]&0xf);
-    double delta=double((colors[2]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
+    borderId=int(readU16(input));
+    input->seek(1,librevenge::RVNG_SEEK_CUR); // a width
+    numBorders=4;
+    for (int j=1; j<4; ++j)
+    {
+      bColors[j]=int(readU8(input));
+      w=readU8(input);
+      widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+    }
+  }
+  if (borderId>=0x8000)
+  {
+    for (int i=0; i<numBorders; ++i)
+    {
+      int wh=i==0 ? numBorders-1 : i-1;
+      Color lineColor=getColorBy2kIndex(bColors[wh]&0xf);
+      double delta=double((bColors[wh]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
+      unsigned rgb[]=
+      {
+        unsigned((1-delta)*double(lineColor.r)+delta*255),
+        unsigned((1-delta)*double(lineColor.g)+delta*255),
+        unsigned((1-delta)*double(lineColor.b)+delta*255)
+      };
+      m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), widths[wh]*12700, widths[wh]>0));
+    }
+  }
+  else if (widths[0]>0)
+  {
+    Color lineColor=getColorBy2kIndex(bColors[0]&0xf);
+    double delta=double((bColors[0]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
     unsigned rgb[]=
     {
       unsigned((1-delta)*double(lineColor.r)+delta*255),
       unsigned((1-delta)*double(lineColor.g)+delta*255),
       unsigned((1-delta)*double(lineColor.b)+delta*255)
     };
-    m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), width*12700, true));
-    if (borderId>=0 && (flags&4))
-    {
-      m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
-      m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
-    }
+    m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), widths[0]*12700, true));
+    m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
+    m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
   }
   if (patternId)
   {
