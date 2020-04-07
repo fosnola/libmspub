@@ -13,6 +13,7 @@
 #include <functional>
 #include <math.h>
 #include <memory>
+#include <numeric>
 
 #include <boost/multi_array.hpp>
 
@@ -794,6 +795,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     {
       auto orig = foldedTransform.transform(Vector2D(x,y));
       auto end = foldedTransform.transform(Vector2D(x+width,y+height));
+      graphicsProps.insert("draw:fill", "none");
       m_painter->setStyle(graphicsProps);
       librevenge::RVNGPropertyList list;
       list.insert("svg:x", orig.m_x);
@@ -1086,13 +1088,22 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
 
 bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &coord) const
 {
+  if (!info.m_borderImgIndex || *info.m_borderImgIndex >= m_borderImages.size())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBCollector::paintBorderArts: call with bad index\n"));
+    return false;
+  }
+  const BorderArtInfo &ba = m_borderImages[*info.m_borderImgIndex];
+  if (ba.m_images.empty() || m_borderImages[*info.m_borderImgIndex].m_offsets.empty())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBCollector::paintBorderArts: call with no images\n"));
+    return false;
+  }
   double x = coord.getXIn(m_width);
   double y = coord.getYIn(m_height);
   double height = coord.getHeightIn();
   double width = coord.getWidthIn();
-  if (!info.m_borderImgIndex || *info.m_borderImgIndex >= m_borderImages.size() || // no image
-      m_borderImages[*info.m_borderImgIndex].m_offsets.empty() || // no offset
-      info.m_lines.empty() || info.m_lines[0].m_widthInEmu <= 0 || // no border
+  if (info.m_lines.empty() || info.m_lines[0].m_widthInEmu <= 0 || // no border
       height<=0 || width<=0) // empty form
     return false;
 
@@ -1110,8 +1121,21 @@ bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &co
   boost::optional<Color> oneBitColor;
   if (bool(info.m_lineBackColor))
     oneBitColor = info.m_lineBackColor.get().getFinalColor(m_paletteColors);
-  const BorderArtInfo &ba = m_borderImages[*info.m_borderImgIndex];
-  size_t numOffset=ba.m_offsets.size();
+
+  // prepare the indices
+  size_t numImages=ba.m_images.size();
+  std::set<unsigned> offsets(ba.m_offsets.begin(),ba.m_offsets.end());
+  std::map<unsigned,unsigned> offsetToIndex;
+  unsigned current=0;
+  for (auto off : offsets)
+  {
+    offsetToIndex[off]=current;
+    if (current+1<numImages) ++current;
+  }
+  std::vector<unsigned> indices;
+  for (auto off : ba.m_offsets) indices.push_back(offsetToIndex.find(off)->second);
+  if (indices.size()<8) indices.resize(8, indices.back());
+  //
   librevenge::RVNGPropertyList whiteProps;
   whiteProps.insert("draw:stroke", "none");
   whiteProps.insert("draw:fill", "solid");
@@ -1144,8 +1168,7 @@ bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &co
     for (int b=0; b<2; ++b)
     {
       size_t wh=(axis==0 ? 1+4*b : 7-4*b);
-      size_t offset=wh<numOffset ?  ba.m_offsets[wh] : ba.m_offsets.back();
-      auto const &bi = ba.m_images[offset];
+      auto const &bi = ba.m_images[indices[wh]];
       double actPos[2]=
       {
         axis==0 ? x+borderImgWidth : xLimits[b],
@@ -1189,8 +1212,7 @@ bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &co
   }
   for (size_t b=0; b<4; ++b)   // now send the 4 borders
   {
-    size_t offset=2*b<numOffset ? ba.m_offsets[2*b] : ba.m_offsets.back();
-    auto const &bi = ba.m_images[offset];
+    auto const &bi = ba.m_images[indices[2*b]];
     writeImage((b==0 || b==3) ? x : x+width-borderImgWidth, (b==0 || b==1) ? y : y+height-borderImgWidth,
                borderImgWidth, borderImgWidth, bi.m_type, bi.m_imgBlob, oneBitColor);
   }
@@ -1269,6 +1291,12 @@ void MSPUBCollector::writeImage(double x, double y,
                                 double height, double width, ImgType type, const librevenge::RVNGBinaryData &blob,
                                 boost::optional<Color> oneBitColor) const
 {
+  if (blob.empty())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBCollector::writeImage: called with empty picture\n"));
+    return;
+  }
+
   librevenge::RVNGPropertyList props;
   if (bool(oneBitColor))
   {
@@ -1938,10 +1966,8 @@ bool MSPUBCollector::addImage(unsigned index, ImgType type, librevenge::RVNGBina
 librevenge::RVNGBinaryData *MSPUBCollector::addBorderImage(ImgType type,
                                                            unsigned borderArtIndex)
 {
-  while (borderArtIndex >= m_borderImages.size())
-  {
-    m_borderImages.push_back(BorderArtInfo());
-  }
+  if (borderArtIndex >= m_borderImages.size())
+    m_borderImages.resize(size_t(borderArtIndex+1));
   m_borderImages[borderArtIndex].m_images.push_back(BorderImgInfo(type));
   return &(m_borderImages[borderArtIndex].m_images.back().m_imgBlob);
 }
@@ -1965,21 +1991,6 @@ void MSPUBCollector::setBorderImageOffset(unsigned index, unsigned offset)
   }
   BorderArtInfo &bai = m_borderImages[index];
   bai.m_offsets.push_back(offset);
-  bool added = false;
-  for (auto i = bai.m_offsetsOrdered.begin();
-       i != bai.m_offsetsOrdered.end(); ++i)
-  {
-    if (*i >= offset)
-    {
-      bai.m_offsetsOrdered.insert(i, offset);
-      added = true;
-      break;
-    }
-  }
-  if (!added)
-  {
-    bai.m_offsetsOrdered.push_back(offset);
-  }
 }
 
 void MSPUBCollector::setShapePage(unsigned seqNum, unsigned pageSeqNum)

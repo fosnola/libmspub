@@ -32,10 +32,12 @@ struct BorderArtInfo
 {
   std::vector<BorderImgInfo> m_images;
   std::vector<unsigned> m_offsets;
-  std::vector<unsigned> m_offsetsOrdered;
-  BorderArtInfo() : m_images(), m_offsets(), m_offsetsOrdered()
+  BorderArtInfo()
+    : m_images()
+    , m_offsets()
   {
   }
+
 };
 }
 #endif
