@@ -510,6 +510,14 @@ void MSPUBCollector::setTableCellTextStyles(unsigned textId, const std::vector<C
   m_tableCellStylesByTextId[textId] = styles;
 }
 
+std::vector<CellStyle> const *MSPUBCollector::getTableCellTextStyles(unsigned seqNum) const
+{
+  auto it=m_tableCellStylesByTextId.find(seqNum);
+  if (it!=m_tableCellStylesByTextId.end())
+    return &it->second;
+  return nullptr;
+}
+
 void MSPUBCollector::useEncodingHeuristic()
 {
   m_encodingHeuristic = true;

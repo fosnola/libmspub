@@ -40,6 +40,7 @@ struct CellStyle
 {
   std::vector<Line> m_borders;
   boost::optional<ColorReference> m_color;
+  unsigned m_flags;
   /** add the style to cell properties (if possible) */
   void addTo(librevenge::RVNGPropertyList &propList, std::vector<Color> const &palette) const;
 };

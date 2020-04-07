@@ -129,6 +129,7 @@ public:
 
   void setTableCellTextEnds(unsigned textId, const std::vector<unsigned> &ends);
   void setTableCellTextStyles(unsigned textId, const std::vector<CellStyle> &styles);
+  std::vector<CellStyle> const *getTableCellTextStyles(unsigned seqNum) const;
   void setTextStringOffset(unsigned textId, unsigned offset);
 
   bool go();

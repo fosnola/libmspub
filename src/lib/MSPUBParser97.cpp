@@ -246,6 +246,8 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   for (auto const &it : m_chunkIdToTextEndMap) textEndToChunkId[it.second]=it.first;
   size_t oldParaPos=0; // used to check for empty line
   size_t actChar=0;
+  bool overridenCell=false;
+  bool prevOverridenCell=false;
   std::vector<CellStyle> cellStyleList;
   for (unsigned c=0; c<length; ++c)
   {
@@ -272,10 +274,15 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         paraStyle=ParagraphStyle();
     }
     auto cellIt=posToCellMap.find((unsigned) actPos);
+    prevOverridenCell=overridenCell;
+    overridenCell=false;
     if (cellIt!=posToCellMap.end())
     {
       if (cellIt->second<=cellStyles.size())
+      {
         cellStyleList.push_back(cellStyles[cellIt->second]);
+        overridenCell=cellStyleList.back().m_flags&4; // cell is overriden
+      }
       else
         cellStyleList.push_back(CellStyle());
     }
@@ -341,13 +348,15 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         if (sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd) ++sIt;
         needNewPara=sIt==posToTypeMap.end() || sIt->second!=ShapeEnd;
       }
+
       if (needNewPara)
       {
-        shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
+        if (!overridenCell) // we must not send anything if this is an overriden cell
+          shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
         paraSpans.clear();
       }
       oldParaPos=unsigned(actPos);
-      if (special==CellEnd)
+      if (special==CellEnd && !prevOverridenCell)
         cellEnds.push_back(unsigned(actChar)+1); // offset begin at 1...
       if (special==ShapeEnd || isEndShape)
       {
@@ -426,7 +435,7 @@ bool MSPUBParser97::parseCellStyles(librevenge::RVNGInputStream *input, unsigned
   input->seek(index*0x200+4, librevenge::RVNG_SEEK_SET);
   std::vector<unsigned> positions;
   positions.resize(N);
-  for (auto &p : positions) p=readU32(input);
+  for (auto &p : positions) p=readU32(input)-2; // the EOL positions
   std::vector<uint8_t> stylePos;
   stylePos.reserve(N);
   for (unsigned i=0; i<N; ++i) stylePos.push_back(readU8(input));
@@ -458,7 +467,7 @@ bool MSPUBParser97::parseCellStyles(librevenge::RVNGInputStream *input, unsigned
     offsetToStyleMap[offs]=newId;
     styles.push_back(CellStyle());
     auto &style=styles.back();
-    input->seek(2, librevenge::RVNG_SEEK_CUR);
+    style.m_flags=readU16(input);
     // the surface color
     unsigned bgColors[2];
     bool ok=true;
@@ -986,6 +995,15 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
   // just in case we have no read all row/columns
   ti.m_rowHeightsInEmu.resize(size_t(numRows),height/numRows);
   ti.m_columnWidthsInEmu.resize(size_t(numCols),width/numCols);
+
+  // assume that the text info are parsed with not errors
+  auto const *cellStyles=m_collector->getTableCellTextStyles(seqNum);
+  if (cellStyles && cellStyles->size()!=numRows*numCols)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: oops, the cell styles size seems bad\n"));
+    cellStyles=0;
+  }
+  auto const *cellStylesPtr=cellStyles ? cellStyles->data() : nullptr;
   for (unsigned r=0; r<numRows; r++)
   {
     CellInfo cellInfo;
@@ -993,6 +1011,14 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
     for (unsigned c=0; c<numCols; c++)
     {
       cellInfo.m_startColumn=cellInfo.m_endColumn=c;
+      if ((cellStylesPtr++->m_flags)&1)
+      {
+        while (c<numCols && cellStylesPtr->m_flags&4)
+        {
+          cellInfo.m_endColumn=++c;
+          ++cellStylesPtr;
+        }
+      }
       ti.m_cells.push_back(cellInfo);
     }
   }
