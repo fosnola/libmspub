@@ -35,8 +35,6 @@ class MSPUBParser97 : public MSPUBParser2k
   };
 
   bool parseTextListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header);
-  void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
-                        ChunkHeader2k const &header) override;
   bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
                        std::vector<CharacterStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
   bool parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,
@@ -48,8 +46,8 @@ class MSPUBParser97 : public MSPUBParser2k
   void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
-                          unsigned textId, unsigned numCols, unsigned numRows, unsigned width, unsigned height);
-  void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header);
+                          unsigned textId, unsigned numCols, unsigned numRows, unsigned width, unsigned height) override;
+  void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header) override;
   void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input) override;
   void getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType);
 public:
@@ -58,7 +56,6 @@ public:
 
 protected:
   std::vector<ListInfo> m_bulletLists;
-  std::map<unsigned, unsigned> m_chunkIdToTextEndMap;
 };
 }
 

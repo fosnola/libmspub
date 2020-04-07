@@ -36,8 +36,9 @@ MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector 
   , m_fileIdToChunkId()
   , m_chunkChildIndicesById()
   , m_shapesAlreadySend()
-  , m_version(3) // assume publisher 97 as the presence of Quill implies 98 or 2000
+  , m_version(5) // assume publisher 98
   , m_isBanner(false)
+  , m_chunkIdToTextEndMap()
 {
 }
 
@@ -70,18 +71,7 @@ bool MSPUBParser2k::getChunkReference(unsigned seqNum, ContentChunkReference &ch
 // Takes a line width specifier in Pub2k format and translates it into quarter points
 unsigned short translateLineWidth(unsigned char lineWidth)
 {
-  if (lineWidth == 0x81)
-  {
-    return 0;
-  }
-  else if (lineWidth > 0x81)
-  {
-    return (unsigned short)(((lineWidth - 0x81) / 3) * 4 + ((lineWidth - 0x81) % 3) + 1);
-  }
-  else
-  {
-    return (unsigned short)(lineWidth * 4);
-  }
+  return (lineWidth&0x80) ? (lineWidth&0x7f) : 4*lineWidth;
 }
 
 Color MSPUBParser2k::getColorBy2kHex(unsigned hex)
@@ -373,6 +363,15 @@ void MSPUBParser2k::parseTextInfos(const ContentChunkReference &, librevenge::RV
 {
 }
 
+void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream *, unsigned, ChunkHeader2k const &,
+                                       unsigned, unsigned, unsigned, unsigned, unsigned)
+{
+}
+
+void MSPUBParser2k::parseClipPath(librevenge::RVNGInputStream *, unsigned, ChunkHeader2k const &)
+{
+}
+
 bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
 {
   input->seek(0x16, librevenge::RVNG_SEEK_SET);
@@ -468,6 +467,9 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0027:
+      // CHECKME: v98: the zone data contains the picture is not
+      // included in the file, the file name still appears in the zone
+      // data....
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found special paper chunk 0x%x, ignored\n", id));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
       m_specialPaperChunkIndex=id;
@@ -607,7 +609,7 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
     ChunkHeader2k header;
     parseChunkHeader(chunk,input,header);
     // changeme: we must find the version before...
-    if (m_version==5 && header.m_maxHeaderSize==0xde) // 2: 5e, 3: 78, 97: 9e, 98: d2, 2000: de
+    if (m_version==5 && header.m_maxHeaderSize>0xd2) // 2: 5e, 3: 78, 97: 9e, 98: d2, 2000: de
       m_version=6;
     else if (m_version==3 && header.m_maxHeaderSize==0x9e)
       m_version=4;
@@ -644,7 +646,10 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
           unsigned page=unsigned(numPages-extra);
           if (page<3) break; // keep at least layout, background, first page
           if (m_chunkChildIndicesById.find(pages[page])!=m_chunkChildIndicesById.end())
-            continue; // this page contain some data, unsure if we want to keep it
+          {
+            MSPUB_DEBUG_MSG(("MSPUBParser2k::parseDocument: find a not empty extra page=%d\n", int(page)));
+            continue; // this page contain some data, unsure if we need to keep it
+          }
           pages.erase(pages.begin()+int(page));
         }
         for (size_t i=2; i<pages.size(); ++i)
@@ -709,9 +714,11 @@ bool MSPUBParser2k::parsePage(librevenge::RVNGInputStream *input, unsigned seqNu
   }
   return true;
 }
+
 bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
 {
-  if (m_version>=5) return true; // TODO: ptr size=4, font name in utf16
+  // checkme: this code must also work in 98, 2000 but there is also a font list in the QUILL stream...
+  if (m_version>=5) return true;
   for (auto id : m_fontChunkIndices)
   {
     auto const &chunk=m_contentChunks[id];
@@ -737,19 +744,24 @@ bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
         continue;
       }
       input->seek(pos[i]+2, librevenge::RVNG_SEEK_SET);
-      for (auto l=pos[i]+2; l<pos[i+1]; ++l)
+      if (m_version<5)
       {
-        auto ch=readU8(input);
-        if (ch==0)
+        for (auto l=pos[i]+2; l<pos[i+1]; ++l)
         {
-          if (l+1==pos[i+1])
+          auto ch=readU8(input);
+          if (ch==0)
+          {
+            if (l+1==pos[i+1])
+              break;
+            MSPUB_DEBUG_MSG(("MSPUBParser2k::parseFonts: find unexpected 0 in name %d in the data block %x\n", int(i), id));
+            name.clear();
             break;
-          MSPUB_DEBUG_MSG(("MSPUBParser2k::parseFonts: find unexpected 0 in name %d in the data block %x\n", int(i), id));
-          name.clear();
-          break;
+          }
+          name.push_back(ch);
         }
-        name.push_back(ch);
       }
+      else if (pos[i]+4<pos[i+1])
+        readNBytes(input, pos[i+1]-pos[i]-4, name);
       m_collector->addFont(name);
     }
   }
@@ -770,7 +782,7 @@ bool MSPUBParser2k::parseBorderArts(librevenge::RVNGInputStream *input)
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArts: can not find the data block\n"));
     return false;
   }
-  if (m_version>=5) // FIXME
+  if (m_version>=6) // FIXME
     return true;
   input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
   ListHeader2k listHeader;
@@ -796,12 +808,13 @@ bool MSPUBParser2k::parseBorderArts(librevenge::RVNGInputStream *input)
 bool MSPUBParser2k::parseBorderArt(librevenge::RVNGInputStream *input, unsigned borderNum, unsigned endPos)
 {
   auto begPos=input->tell();
-  if (unsigned(begPos+66+4)>endPos)
+  unsigned const headerSize=m_version<5 ? 50 : 92;
+  if (unsigned(begPos+headerSize+16+4)>endPos)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArt: art zone %d seems to short\n",int(borderNum)));
     return false;
   }
-  input->seek(begPos+50, librevenge::RVNG_SEEK_SET);
+  input->seek(begPos+headerSize, librevenge::RVNG_SEEK_SET);
   unsigned decal[8];
   for (auto &d : decal) d = readU16(input);
   std::map<unsigned, unsigned> offsetToImage;
@@ -1025,25 +1038,334 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
-  parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
-  if (header.m_type==C_Group) // checkme
+  if (m_version>=5 && (m_version>5 || header.m_fileType>8))
+  {
+    // REMOVEME: old code
+    parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
+    if (header.m_type==C_Group) // checkme
+      return;
+    if (header.m_type == C_Text)
+    {
+      input->seek(header.m_beginOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
+      unsigned txtId = readU16(input);
+      m_collector->addTextShape(txtId, seqNum);
+    }
+    if (header.m_type==C_CustomShape)
+    {
+      input->seek(header.m_beginOffset + 0x31, librevenge::RVNG_SEEK_SET);
+      ShapeType shapeType = getShapeType(readU8(input));
+      if (shapeType != UNKNOWN_SHAPE)
+        m_collector->setShapeType(seqNum, shapeType);
+    }
+    if (header.m_type!=C_Image)
+      parseShapeFill(input, seqNum, header.m_beginOffset);
+    parseShapeLine(input, header.isRectangle(), header.m_beginOffset, seqNum);
     return;
-  if (header.m_type == C_Text)
-  {
-    input->seek(header.m_beginOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
-    unsigned txtId = readU16(input);
-    m_collector->addTextShape(txtId, seqNum);
   }
-  if (header.m_type==C_CustomShape)
+  if (header.m_type==C_Group)
+    return;
+  if (unsigned(input->tell())+(m_version==2 ? 9 : m_version<5 ? 19 : m_version==5 ? 27 : 29)>header.m_dataOffset)
   {
-    input->seek(header.m_beginOffset + 0x31, librevenge::RVNG_SEEK_SET);
-    ShapeType shapeType = getShapeType(readU8(input));
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parseShapeFormat: the zone is too small\n"));
+    return;
+  }
+  unsigned headerFlags=readU16(input); // flags: 1=shadow, 4=selected
+  if (headerFlags&0x18)
+    m_collector->setShapeWrapping(seqNum, ShapeInfo::W_Dynamic);
+  if (m_version>=5) input->seek(8, librevenge::RVNG_SEEK_CUR);
+  if (m_version>=6) input->seek(2, librevenge::RVNG_SEEK_CUR);
+  unsigned colors[2];
+  for (auto &c : colors) c=m_version<=2 ? readU8(input) : readU32(input);
+  int patternId=int(readU8(input));
+  if (m_version>=3) input->seek(1, librevenge::RVNG_SEEK_CUR);
+  int numBorders=1;
+  unsigned bColors[4];
+  double widths[4];
+  if (m_version<=2)
+  {
+    bColors[0]=readU8(input);
+    auto w=readU8(input);
+    widths[0]=double(translateLineWidth(w))/4;
+  }
+  else
+  {
+    auto w=readU8(input);
+    widths[0]=double(translateLineWidth(w))/4;
+    bColors[0]=readU32(input);
+  }
+  input->seek(2,librevenge::RVNG_SEEK_CUR); // 0
+  int borderId=0xfffe; // none
+  if (header.isRectangle() && unsigned(input->tell())+(m_version==2 ? 9 : 21)<=header.m_dataOffset)
+  {
+    borderId=int(readU16(input));
+    input->seek(1,librevenge::RVNG_SEEK_CUR); // a width
+    numBorders=4;
+    if (m_version<=2)
+    {
+      for (int j=1; j<4; ++j)
+      {
+        bColors[j]=readU8(input);
+        auto w=readU8(input);
+        widths[j]=double(translateLineWidth(w))/4;
+      }
+    }
+    else
+    {
+      for (int j=1; j<4; ++j)
+      {
+        input->seek(1,librevenge::RVNG_SEEK_CUR);
+        auto w=readU8(input);
+        widths[j]=double(translateLineWidth(w))/4;
+        bColors[j]=readU32(input);
+      }
+    }
+    if (header.m_fileType == 0 && unsigned(input->tell())+11<=header.m_dataOffset)
+    {
+      // text in Content
+      input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
+      unsigned txtId = 65536+readU16(input);
+      m_collector->addTextShape(m_chunkIdToTextEndMap.find(seqNum)!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
+      auto fl=readU8(input);
+      if ((fl>>4)!=1)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser2k::parseShapeFormat: find %d columns for zone %x\n", int(fl>>4), seqNum));
+      }
+    }
+    else if (header.m_fileType == 8 && unsigned(input->tell())+20<=header.m_dataOffset)
+    {
+      // text in Quill
+      input->seek(10+4+4, librevenge::RVNG_SEEK_CUR); // 5:margin, 0, color, numCol
+      unsigned txtId = readU16(input);
+      m_collector->addTextShape(txtId, seqNum);
+    }
+    else if (header.m_type == C_Table && unsigned(input->tell())+(m_version==2 ? 24 : 32)<=header.m_dataOffset)
+    {
+      input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
+      unsigned txtId = 65536+readU16(input);
+      if (m_chunkIdToTextEndMap.find(seqNum)!=m_chunkIdToTextEndMap.end()) txtId=seqNum;
+      m_collector->addTextShape(txtId, seqNum);
+      input->seek(2, librevenge::RVNG_SEEK_CUR); // data size ?
+      unsigned numCols = readU16(input);
+      if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
+      unsigned numRows = readU16(input);
+      if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
+      unsigned width=readU32(input);
+      unsigned height=readU32(input);
+      if (numRows && numCols)
+        parseTableInfoData(input, seqNum, header, txtId, numCols, numRows, width, height);
+    }
+    else if (header.m_type==C_Image || header.m_type==C_OLE)
+      parseClipPath(input, seqNum, header);
+  }
+  else if (header.m_type==C_CustomShape && unsigned(input->tell())+12<=header.m_dataOffset)
+  {
+    ShapeType shapeType = getShapeType((unsigned char)readU16(input));
     if (shapeType != UNKNOWN_SHAPE)
       m_collector->setShapeType(seqNum, shapeType);
+    auto flags=readU16(input);
+    if (flags&3)
+      m_collector->setShapeFlip(seqNum, flags&2, flags&1);
+    int rot=(flags>>2)&3;
+    if (rot)
+      m_collector->setShapeRotation(seqNum,360-90*rot);
+    /*
+      for (int i=0; i<4; ++i)
+      m_collector->setAdjustValue(seqNum, i, readS16(input));
+    */
   }
-  if (header.m_type!=C_Image)
-    parseShapeFill(input, seqNum, header.m_beginOffset);
-  parseShapeLine(input, header.isRectangle(), header.m_beginOffset, seqNum);
+  else if (header.m_type==C_Line && unsigned(input->tell())+18<=header.m_dataOffset)
+  {
+    input->seek(16, librevenge::RVNG_SEEK_CUR);
+    auto flags=readU16(input);
+    if ((flags&0x1)==0)
+      m_collector->setShapeFlip(seqNum, true, false);
+    if (flags&0x6)
+    {
+      static Arrow const arrows[]=
+      {
+        Arrow(NO_ARROW, MEDIUM, LARGE),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE),
+        Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE_ARROW, MEDIUM, SMALL),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 4:UNKNOWN
+        Arrow(LINE_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 6:UNKNOWN
+        Arrow(LINE_ARROW, MEDIUM, SMALL),
+        Arrow(KITE_ARROW, MEDIUM, LARGE),
+        Arrow(KITE_ARROW, MEDIUM, MEDIUM),
+        Arrow(ROTATED_SQUARE_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE1_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // c:UNKNOWN
+        Arrow(TRIANGLE1_ARROW, MEDIUM, SMALL),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // e:UNKNOWN
+        Arrow(FAT_LINE_ARROW, MEDIUM, MEDIUM),
+        Arrow(FAT_LINE_ARROW, MEDIUM, SMALL),
+        Arrow(BLOCK_ARROW, MEDIUM, LARGE),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 12:UNKNOWN
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 13:UNKNOWN
+        Arrow(TRIANGLE2_ARROW, MEDIUM, MEDIUM),
+      };
+      int numArrows=int(MSPUB_N_ELEMENTS(arrows));
+      int begArrow=((flags>>4)&0x1f);
+      if (begArrow>=numArrows) begArrow=1;
+      int endArrow=((flags>>9)&0x1f);
+      if (endArrow>=numArrows) endArrow=0;
+      if (flags&0x2)
+      {
+        m_collector->setShapeEndArrow(seqNum, arrows[begArrow]);
+        if (endArrow && (flags&0x4)==0)
+        {
+          Arrow finalArrow=arrows[endArrow];
+          finalArrow.m_flipY=true;
+          m_collector->setShapeBeginArrow(seqNum, finalArrow);
+        }
+      }
+      if (flags&0x4)
+      {
+        m_collector->setShapeBeginArrow(seqNum, arrows[begArrow]);
+        if (endArrow && (flags&0x2)==0)
+        {
+          Arrow finalArrow=arrows[endArrow];
+          finalArrow.m_flipY=true;
+          m_collector->setShapeEndArrow(seqNum, finalArrow);
+        }
+      }
+    }
+  }
+  if (borderId>=0x8000)
+  {
+    for (int i=0; i<numBorders; ++i)
+    {
+      int wh=i+1 < numBorders ? i+1 : 0;
+      m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[wh])), unsigned(widths[wh]*12700), widths[wh]>0));
+    }
+  }
+  else if (widths[0]>0)
+  {
+    m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[0])), unsigned(widths[0]*12700), true));
+    m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
+    m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
+  }
+  if (patternId&0x80)
+  {
+    struct GradientData
+    {
+      GradientData(GradientFill::Style style, double angle, boost::optional<double> cx=boost::none, boost::optional<double> cy=boost::none, bool swapColor=false)
+        : m_style(style)
+        , m_angle(angle)
+        , m_cx(cx)
+        , m_cy(cy)
+        , m_swapColor(swapColor)
+      {
+      }
+      GradientFill::Style m_style;
+      double m_angle;
+      boost::optional<double> m_cx;
+      boost::optional<double> m_cy;
+      bool m_swapColor;
+    };
+    static GradientData const(gradients[])=
+    {
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0,0},
+      {GradientFill::G_Rectangular,0, 1,0},
+      {GradientFill::G_Rectangular,0, 1,1},
+      {GradientFill::G_Rectangular,0, 0,1},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0,0},
+      {GradientFill::G_Ellipsoid,0, 1,0},
+      {GradientFill::G_Ellipsoid,0, 0,1},
+      {GradientFill::G_Ellipsoid,0, 0,1},
+      {GradientFill::G_Linear,0, boost::none,boost::none, true},
+      {GradientFill::G_Linear,0},
+      {GradientFill::G_Linear,90},
+      {GradientFill::G_Linear,90, boost::none,boost::none, true},
+      {GradientFill::G_Axial,0, boost::none,boost::none, true},
+      {GradientFill::G_Axial,90, boost::none,boost::none, true},
+      {GradientFill::G_Axial,45},
+      {GradientFill::G_Axial,-45},
+      {GradientFill::G_Linear,45, boost::none,boost::none, true},
+      {GradientFill::G_Linear,-45, boost::none,boost::none, true},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // triangle
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // triangle
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // star
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // almost ellipsoid
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Rectangular,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // pentagon
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // pentagon
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // concave hexa
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // hexa
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // up arrow
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // heart
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5},
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // spiral
+      {GradientFill::G_Ellipsoid,0, 0.5,0.5}, // spiral 2
+    };
+    patternId&=0x7f;
+    if (unsigned(patternId)<MSPUB_N_ELEMENTS(gradients))
+    {
+      auto const &data=gradients[patternId];
+      auto gradient=std::make_shared<GradientFill>(m_collector, data.m_style, data.m_angle, data.m_cx, data.m_cy);
+      gradient->addColor(ColorReference(translate2kColorReference(colors[data.m_swapColor ? 1 : 0])), 0, 1);
+      gradient->addColor(ColorReference(translate2kColorReference(colors[data.m_swapColor ? 0 : 1])), 1, 1);
+      m_collector->setShapeFill(seqNum, gradient, false);
+    }
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseShapeFormat: unknown gradiant =%d\n", patternId));
+    }
+  }
+  else if (patternId)
+  {
+    if (patternId==1 || patternId==2)
+      m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(ColorReference(translate2kColorReference(colors[2-patternId])), 1, m_collector), false);
+    else if (patternId>=3 && patternId<=24)
+    {
+      uint8_t const patterns[]=
+      {
+        0x77, 0xdd, 0x77, 0xdd, 0x77, 0xdd, 0x77, 0xdd,
+        0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa,
+        0x88, 0x22, 0x88, 0x22, 0x88, 0x22, 0x88, 0x22,
+        0x00, 0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22,
+        0x08, 0x00, 0x80, 0x00, 0x08, 0x00, 0x80, 0x00,
+        0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x80,
+        0xcc, 0xcc, 0x33, 0x33, 0xcc, 0xcc, 0x33, 0x33,
+        0x88, 0x88, 0x88, 0xff, 0x88, 0x88, 0x88, 0xff,
+        0x88, 0x55, 0x22, 0x55, 0x88, 0x55, 0x22, 0x55,
+        0x11, 0x88, 0x44, 0x22, 0x11, 0x88, 0x44, 0x22,
+        0x11, 0x22, 0x44, 0x88, 0x11, 0x22, 0x44, 0x88,
+        0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+        0x33, 0x99, 0xcc, 0x66, 0x33, 0x99, 0xcc, 0x66,
+        0x33, 0x66, 0xcc, 0x99, 0x33, 0x66, 0xcc, 0x99,
+        0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33,
+        0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x55, 0x00,
+        0xff, 0x01, 0x01, 0x01, 0xff, 0x10, 0x10, 0x10,
+        0x01, 0x02, 0x04, 0x08, 0x14, 0x22, 0x41, 0x80,
+        0x11, 0xa2, 0x44, 0x2a, 0x11, 0x8a, 0x44, 0xa8
+      };
+
+      m_collector->setShapeFill(seqNum, std::make_shared<Pattern88Fill>
+                                (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),
+                                 ColorReference(translate2kColorReference(colors[1])),
+                                 ColorReference(translate2kColorReference(colors[0]))), false);
+    }
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseShapeFormat: unknown pattern =%d\n", patternId));
+    }
+  }
 }
 
 unsigned MSPUBParser2k::getShapeFillTypeOffset() const
@@ -1074,7 +1396,7 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
   bool retVal = true;
   m_collector->beginGroup();
   m_collector->setCurrentGroupSeqNum(seqNum);
-  if (m_version<=6)
+  if (m_version<=5)
   {
     ContentChunkReference chunk;
     if (!getChunkReference(seqNum, chunk))
@@ -1203,7 +1525,6 @@ void MSPUBParser2k::parseShapeLine(librevenge::RVNGInputStream *input, bool isRe
 
 bool MSPUBParser2k::parse()
 {
-  m_version=5; // find a method to differentiate 98 and 2k
   std::unique_ptr<librevenge::RVNGInputStream> contents(m_input->getSubStreamByName("Contents"));
   if (!contents)
   {

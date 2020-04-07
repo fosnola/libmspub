@@ -103,8 +103,12 @@ private:
   std::set<unsigned> m_shapesAlreadySend;
 
 protected:
-  unsigned m_version;
+  // CHANGEME: actually, MSPUBParser97::parseContentsTextIfNecessary
+  // set version to 2[v2] or 3[v3-98] ; finally
+  // MSPUBParser2k::parseDocument differentiate v3-97, and 98-2000
+  unsigned m_version; // v2:2, v3:3, 97:4, 98:5, 2000:6
   bool m_isBanner;
+  std::map<unsigned, unsigned> m_chunkIdToTextEndMap;
 
   // helper functions
   static ShapeType getShapeType(unsigned char shapeSpecifier);
@@ -117,8 +121,12 @@ protected:
                         ChunkHeader2k &header);
   virtual void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
   virtual void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
-  virtual void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
-                                ChunkHeader2k const &header);
+  void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
+                        ChunkHeader2k const &header);
+  virtual void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
+                                  unsigned textId, unsigned numCols, unsigned numRows, unsigned width, unsigned height);
+  virtual void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header);
+
   void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
                        unsigned chunkOffset);
   bool parseGroup(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned page);
