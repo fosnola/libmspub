@@ -1343,7 +1343,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
               MSPUBBlockInfo tabInfo = parseBlock(input, true);
               if (tabInfo.id == TAB_AMOUNT)
               {
-                ret.m_tabStopsInEmu.push_back(tabInfo.data);
+                ret.m_tabStops.push_back(TabStop(tabInfo.data));
               }
             }
           }

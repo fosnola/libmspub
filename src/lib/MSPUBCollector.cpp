@@ -54,8 +54,7 @@ static void separateTabsAndInsertText(librevenge::RVNGDrawingInterface *iface, c
     {
       if (!tmpText.empty())
       {
-        if (iface)
-          iface->insertText(tmpText);
+        iface->insertText(tmpText);
         tmpText.clear();
       }
 
@@ -66,20 +65,22 @@ static void separateTabsAndInsertText(librevenge::RVNGDrawingInterface *iface, c
     {
       if (!tmpText.empty())
       {
-        if (iface)
-          iface->insertText(tmpText);
+        iface->insertText(tmpText);
         tmpText.clear();
       }
 
-      if (iface)
-        iface->insertLineBreak();
+      iface->insertLineBreak();
+    }
+    else if ((unsigned char)(*(i())) <= 0x1f)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBCollector[separateTabsAndInsertText]:find odd character %x\n", unsigned(*i())));
     }
     else
     {
       tmpText.append(i());
     }
   }
-  if (iface && !tmpText.empty())
+  if (!tmpText.empty())
     iface->insertText(tmpText);
 }
 
@@ -110,8 +111,7 @@ static void separateSpacesAndInsertText(librevenge::RVNGDrawingInterface *iface,
         tmpText.clear();
       }
 
-      if (iface)
-        iface->insertSpace();
+      iface->insertSpace();
     }
     else
     {
@@ -1169,7 +1169,14 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
                 {
                   librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
                   m_painter->openSpan(charProps);
-                  separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
+                  if (text[para].spans[i_spans].isPageField)
+                  {
+                    librevenge::RVNGPropertyList fieldList;
+                    fieldList.insert("librevenge:field-type", "text:page-number");
+                    m_painter->insertField(fieldList);
+                  }
+                  else
+                    separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
                   m_painter->closeSpan();
                 }
 
@@ -1229,11 +1236,18 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
         {
           librevenge::RVNGString textString;
-          appendCharacters(textString, line.spans[i_spans].chars,
-                           getCalculatedEncoding());
+          if (!line.spans[i_spans].chars.empty())
+            appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
           librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
           m_painter->openSpan(charProps);
-          separateSpacesAndInsertText(m_painter, textString);
+          if (line.spans[i_spans].isPageField)
+          {
+            librevenge::RVNGPropertyList fieldList;
+            fieldList.insert("librevenge:field-type", "text:page-number");
+            m_painter->insertField(fieldList);
+          }
+          else
+            separateSpacesAndInsertText(m_painter, textString);
           m_painter->closeSpan();
         }
         m_painter->closeParagraph();
@@ -1619,6 +1633,54 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
   {
     ret.insert("style:length", (int)dropCapLetters);
   }
+  auto const &tabStops = !style.m_tabStops.empty() ? style.m_tabStops : defaultStyle.m_tabStops;
+  if (!tabStops.empty())
+  {
+    librevenge::RVNGPropertyListVector tabs;
+    for (auto const &tab : tabStops)
+    {
+      librevenge::RVNGPropertyList retTab;
+      switch (tab.m_alignment)
+      {
+      case TabStop::RIGHT:
+        retTab.insert("style:type", "right");
+        break;
+      case TabStop::CENTER:
+        retTab.insert("style:type", "center");
+        break;
+      case TabStop::DECIMAL:
+        retTab.insert("style:type", "char");
+        if (tab.m_decimalChar)
+        {
+          librevenge::RVNGString oDecimal;
+          std::vector<unsigned char> fDecimal;
+          fDecimal.push_back(*tab.m_decimalChar);
+          appendCharacters(oDecimal, fDecimal, getCalculatedEncoding());
+          retTab.insert("style:char", oDecimal);
+        }
+        else
+          retTab.insert("style:char", ".");
+        break;
+      case TabStop::LEFT:
+#if !defined(__clang__)
+      default:
+#endif
+        break;
+      }
+      retTab.insert("style:position", tab.m_positionInEmu/EMUS_IN_INCH, librevenge::RVNG_INCH);
+      if (tab.m_leaderChar)
+      {
+        librevenge::RVNGString oLeader;
+        std::vector<unsigned char> fLeader;
+        fLeader.push_back(*tab.m_leaderChar);
+        appendCharacters(oLeader, fLeader, getCalculatedEncoding());
+        retTab.insert("style:leader-text", oLeader);
+        retTab.insert("style:leader-style", "solid");
+      }
+      tabs.append(retTab);
+    }
+    ret.insert("style:tab-stops", tabs);
+  }
   return ret;
 }
 
@@ -1655,19 +1717,13 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
     fillUnderline(ret, get(style.underline));
   else if (defaultCharStyle.underline)
     fillUnderline(ret, get(defaultCharStyle.underline));
-  if (style.textScale)
-    ret.insert("fo:text-scale", get(style.textScale), librevenge::RVNG_PERCENT);
-  else if (defaultCharStyle.textScale)
-    ret.insert("fo:text-scale", get(defaultCharStyle.textScale), librevenge::RVNG_PERCENT);
-  if (bool(style.textSizeInPt))
-  {
-    ret.insert("fo:font-size", style.textSizeInPt.get() / POINTS_IN_INCH);
-  }
-  else if (bool(defaultCharStyle.textSizeInPt))
-  {
-    ret.insert("fo:font-size", defaultCharStyle.textSizeInPt.get()
-               / POINTS_IN_INCH);
-  }
+  auto textScale = style.textScale ? style.textScale : defaultCharStyle.textScale;
+  if (textScale) ret.insert("fo:text-scale", get(textScale), librevenge::RVNG_PERCENT);
+  auto letterSpacingInPt = style.letterSpacingInPt ? style.letterSpacingInPt : defaultCharStyle.letterSpacingInPt;
+  if (letterSpacingInPt) ret.insert("fo:letter-spacing", get(letterSpacingInPt), librevenge::RVNG_POINT);
+  auto textSizeInPt = style.textSizeInPt ? style.textSizeInPt : defaultCharStyle.textSizeInPt;
+  if (textSizeInPt) ret.insert("fo:font-size", get(textSizeInPt) / POINTS_IN_INCH);
+
   if (style.colorIndex >= 0 && (size_t)style.colorIndex < m_textColors.size())
   {
     ret.insert("fo:color", getColorString(m_textColors[style.colorIndex].getFinalColor(m_paletteColors)));
@@ -1799,7 +1855,13 @@ void MSPUBCollector::writePage(unsigned pageSeqNum) const
 
 void MSPUBCollector::writePageShapes(unsigned pageSeqNum) const
 {
-  const PageInfo &pageInfo = m_pagesBySeqNum.find(pageSeqNum)->second;
+  auto const &pageIt=m_pagesBySeqNum.find(pageSeqNum);
+  if (pageIt==m_pagesBySeqNum.end())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBCollector can not find page id: 0x%x\n", pageSeqNum));
+    return;
+  }
+  const PageInfo &pageInfo = pageIt->second;
   for (const auto &shapeGroup : pageInfo.m_shapeGroupsOrdered)
     shapeGroup->visit(std::bind(&MSPUBCollector::paintShape, this, _1, _2, _3, _4, _5));
 }

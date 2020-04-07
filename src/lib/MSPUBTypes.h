@@ -121,6 +121,7 @@ struct CharacterStyle
     , emboss(false)
     , engrave(false)
     , textScale()
+    , letterSpacingInPt()
     , lcid()
   {
   }
@@ -138,6 +139,7 @@ struct CharacterStyle
   bool emboss;
   bool engrave;
   boost::optional<double> textScale;
+  boost::optional<double> letterSpacingInPt;
   boost::optional<unsigned> lcid;
 };
 
@@ -160,6 +162,22 @@ struct LineSpacingInfo
   }
 };
 
+struct TabStop
+{
+  enum Alignment { LEFT, RIGHT, CENTER, DECIMAL };
+  explicit TabStop(double position = 0, Alignment alignment = LEFT)
+    : m_positionInEmu(position)
+    , m_alignment(alignment)
+    , m_decimalChar()
+    , m_leaderChar()
+  {
+  }
+  double m_positionInEmu;
+  Alignment m_alignment;
+  boost::optional<unsigned char> m_decimalChar;
+  boost::optional<unsigned char> m_leaderChar;
+};
+
 struct ParagraphStyle
 {
   boost::optional<Alignment> m_align;
@@ -171,22 +189,23 @@ struct ParagraphStyle
   boost::optional<unsigned> m_leftIndentEmu;
   boost::optional<unsigned> m_rightIndentEmu;
   boost::optional<ListInfo> m_listInfo;
-  std::vector<unsigned> m_tabStopsInEmu;
+  std::vector<TabStop> m_tabStops;
   boost::optional<unsigned> m_dropCapLines;
   boost::optional<unsigned> m_dropCapLetters;
   ParagraphStyle() :
     m_align(), m_defaultCharStyleIndex(), m_lineSpacing(), m_spaceBeforeEmu(),
     m_spaceAfterEmu(), m_firstLineIndentEmu(), m_leftIndentEmu(),
-    m_rightIndentEmu(), m_listInfo(), m_tabStopsInEmu(), m_dropCapLines(), m_dropCapLetters()
+    m_rightIndentEmu(), m_listInfo(), m_tabStops(), m_dropCapLines(), m_dropCapLetters()
   {
   }
 };
 
 struct TextSpan
 {
-  TextSpan(const std::vector<unsigned char> &c, const CharacterStyle &s) : chars(c), style(s) { }
+  TextSpan(const std::vector<unsigned char> &c, const CharacterStyle &s) : chars(c), style(s), isPageField(false) { }
   std::vector<unsigned char> chars;
   CharacterStyle style;
+  bool isPageField;
 };
 
 struct TextParagraph

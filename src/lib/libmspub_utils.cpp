@@ -330,7 +330,7 @@ void readNBytes(librevenge::RVNGInputStream *input, unsigned long length, std::v
 {
   if (length == 0)
   {
-    MSPUB_DEBUG_MSG(("Attempt to read 0 bytes!"));
+    MSPUB_DEBUG_MSG(("libmspub_utils[readNBytes]:Attempt to read 0 bytes!"));
     return;
   }
 
@@ -385,7 +385,7 @@ void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned c
 {
   if (characters.empty())
   {
-    MSPUB_DEBUG_MSG(("Attempt to append 0 characters!"));
+    MSPUB_DEBUG_MSG(("libmspub_utils[appendCharacters]: Attempt to append 0 characters!"));
     return;
   }
 
