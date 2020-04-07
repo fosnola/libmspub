@@ -36,7 +36,7 @@ MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector 
   , m_fileIdToChunkId()
   , m_chunkChildIndicesById()
   , m_shapesAlreadySend()
-  , m_version(4) // assume publisher 97 as the presence of Quill implies 98 or 2000
+  , m_version(3) // assume publisher 97 as the presence of Quill implies 98 or 2000
   , m_isBanner(false)
 {
 }
@@ -608,7 +608,11 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
       if (parseIdList(input, chunk.end, pages) && pages.size()>=2)
       {
         unsigned masterId=pages[1];
-        if (m_version==3) pages.pop_back(); // what is the last page
+        if (m_version==3 && pages.size()>3)
+        {
+          if (m_chunkChildIndicesById.find(pages.back())==m_chunkChildIndicesById.end())
+            pages.pop_back(); // what is the last page
+        }
         for (size_t i=2; i<pages.size(); ++i)
           m_collector->addPage(pages[i]);
         if (m_version<=3)
@@ -918,7 +922,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 
   unsigned page = pageSeqNum.get_value_or(chunk.parentSeqNum);
   input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
-  if (topLevelCall && m_version>3)
+  if (topLevelCall && m_version>=5)
   {
     // ignore non top level shapes
     int i_page = -1;
@@ -1023,7 +1027,7 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
   bool retVal = true;
   m_collector->beginGroup();
   m_collector->setCurrentGroupSeqNum(seqNum);
-  if (m_version<=3)
+  if (m_version<5)
   {
     auto it=m_fileIdToChunkId.find(seqNum);
     if (it==m_fileIdToChunkId.end())

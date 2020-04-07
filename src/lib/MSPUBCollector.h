@@ -72,6 +72,7 @@ public:
   void setNextPage(unsigned seqNum);
 
   void setShapeType(unsigned seqNum, ShapeType type);
+  void setShapeWrapping(unsigned seqNum, ShapeInfo::Wrapping wrapping);
   void setShapeCropType(unsigned seqNum, ShapeType cropType);
   void setShapePictureRecolor(unsigned seqNum, const ColorReference &recolor);
   void setShapePictureBrightness(unsigned seqNum, int brightness);

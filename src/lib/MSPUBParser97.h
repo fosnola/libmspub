@@ -32,12 +32,6 @@ class MSPUBParser97 : public MSPUBParser2k
     }
   };
 
-  unsigned getFirstLineOffset() const override;
-  unsigned getSecondLineOffset() const override;
-  unsigned getShapeFillTypeOffset() const override;
-  unsigned getShapeFillColorOffset() const override;
-  unsigned getTextIdOffset() const override;
-
   void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                         ChunkHeader2k const &header) override;
   bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
@@ -51,6 +45,7 @@ class MSPUBParser97 : public MSPUBParser2k
   void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
                           unsigned numCols, unsigned numRows, unsigned width, unsigned height);
+  void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header);
   void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input) override;
   void getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType);
 public:

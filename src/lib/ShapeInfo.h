@@ -36,8 +36,10 @@ namespace libmspub
 void noop(const CustomShape *);
 struct ShapeInfo
 {
+  enum Wrapping { W_None, W_Left, W_Right, W_Parallel, W_Dynamic, W_RunThrough };
   boost::optional<ShapeType> m_type;
   boost::optional<ShapeType> m_cropType;
+  boost::optional<Wrapping> m_wrapping;
   boost::optional<unsigned> m_imgIndex;
   boost::optional<unsigned> m_borderImgIndex;
   boost::optional<unsigned> m_OLEIndex;
@@ -68,7 +70,7 @@ struct ShapeInfo
   std::vector<libmspub::Vertex> m_clipPath;
   boost::optional<int> m_pictureBrightness;
   boost::optional<int> m_pictureContrast;
-  ShapeInfo() : m_type(), m_cropType(), m_imgIndex(), m_borderImgIndex(), m_OLEIndex(),
+  ShapeInfo() : m_type(), m_cropType(), m_wrapping(), m_imgIndex(), m_borderImgIndex(), m_OLEIndex(),
     m_coordinates(), m_lines(), m_pageSeqNum(),
     m_textId(), m_adjustValuesByIndex(), m_adjustValues(),
     m_rotation(), m_flips(), m_margins(), m_borderPosition(),

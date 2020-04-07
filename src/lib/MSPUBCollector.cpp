@@ -387,6 +387,11 @@ void MSPUBCollector::setShapeTableInfo(unsigned seqNum,
   m_shapeInfosBySeqNum[seqNum].m_tableInfo = ti;
 }
 
+void MSPUBCollector::setShapeWrapping(unsigned seqNum, ShapeInfo::Wrapping wrapping)
+{
+  m_shapeInfosBySeqNum[seqNum].m_wrapping = wrapping;
+}
+
 void MSPUBCollector::setShapeNumColumns(unsigned seqNum,
                                         unsigned numColumns)
 {
@@ -708,6 +713,31 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   else if (info.m_fill)
   {
     info.m_fill->getProperties(&graphicsProps);
+  }
+  if (info.m_wrapping)
+  {
+    switch (*info.m_wrapping)
+    {
+    case ShapeInfo::W_Left:
+      graphicsProps.insert("style:wrap", "left");
+      break;
+    case ShapeInfo::W_Right:
+      graphicsProps.insert("style:wrap", "right");
+      break;
+    case ShapeInfo::W_Parallel:
+      graphicsProps.insert("style:wrap", "parallel");
+      break;
+    case ShapeInfo::W_Dynamic:
+      graphicsProps.insert("style:wrap", "dynamic");
+      break;
+    case ShapeInfo::W_RunThrough:
+      graphicsProps.insert("style:wrap", "run-through");
+      break;
+
+    case ShapeInfo::W_None:
+    default:
+      break;
+    }
   }
   bool hasStroke = false;
   bool hasBorderArt = false;

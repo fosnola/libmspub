@@ -30,11 +30,6 @@ MSPUBParser97::MSPUBParser97(librevenge::RVNGInputStream *input, MSPUBCollector 
   m_collector->useEncodingHeuristic();
 }
 
-unsigned MSPUBParser97::getTextIdOffset() const
-{
-  return 0x46;
-}
-
 bool MSPUBParser97::parse()
 {
   std::unique_ptr<librevenge::RVNGInputStream> contents(m_input->getSubStreamByName("Contents"));
@@ -119,31 +114,17 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   input->seek(blockStart+4, librevenge::RVNG_SEEK_SET);
   unsigned version=readU16(input);
   if (version>=200 && version<300) m_version=2; // mspub 2
-  else if (version>=300)
-  {
-    // let read the content major sub version
-    input->seek(7, librevenge::RVNG_SEEK_SET);
-    unsigned subVersion=readU8(input);
-    if (subVersion==0 || subVersion==1)
-      m_version=3+subVersion;
-    else   // ok assume 97
-    {
-      m_version=4;
-      MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: oops find unknown sub version=%d, assume 97\n", int(subVersion)));
-    }
-  }
+  else if (version>=300) m_version=3; // mspub 3 or mspub 97
   else   // assume mspub 2
   {
     m_version=2;
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: oops find version=%d, assume v2\n", int(version)));
   }
-  if (m_version<=3)
-  {
-    // set the default parameter
-    CharacterStyle defaultCharStyle;
-    defaultCharStyle.textSizeInPt=10;
-    m_collector->addDefaultCharacterStyle(defaultCharStyle);
-  }
+  // set the default parameter
+  CharacterStyle defaultCharStyle;
+  defaultCharStyle.textSizeInPt=10;
+  m_collector->addDefaultCharacterStyle(defaultCharStyle);
+
   input->seek(blockStart+14, librevenge::RVNG_SEEK_SET);
   unsigned textStart = readU32(input);
   unsigned textEnd = readU32(input);
@@ -156,15 +137,12 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     parseSpanStyles(input, id, spanStyles, posToSpanMap);
   std::vector<ParagraphStyle> paraStyles;
   std::map<unsigned, unsigned> posToParaMap;
+  for (unsigned id=index[1]; id<index[2]; ++id)
+    parseParagraphStyles(input, id, paraStyles, posToParaMap);
   std::vector<CellStyle> cellStyles;
   std::map<unsigned, unsigned> posToCellMap;
-  if (m_version<=3)
-  {
-    for (unsigned id=index[1]; id<index[2]; ++id)
-      parseParagraphStyles(input, id, paraStyles, posToParaMap);
-    for (unsigned id=index[2]; id<index[3]; ++id)
-      parseCellStyles(input, id, cellStyles, posToCellMap);
-  }
+  for (unsigned id=index[2]; id<index[3]; ++id)
+    parseCellStyles(input, id, cellStyles, posToCellMap);
 
   input->seek(textStart, librevenge::RVNG_SEEK_SET);
   std::map<unsigned,MSPUBParser97::What> posToTypeMap;
@@ -423,7 +401,7 @@ bool MSPUBParser97::parseCellStyles(librevenge::RVNGInputStream *input, unsigned
       }
       else
       {
-        MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: unknown pattern=%d\n", patternId));
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseCellStyles: unknown pattern=%d\n", patternId));
       }
       if (percent>0)
       {
@@ -773,7 +751,7 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
     else // color is no longer stored here
       input->seek(1, librevenge::RVNG_SEEK_CUR);
   }
-  if (m_version<=3 && length >= 9)
+  if (length >= 9)
   {
     unsigned fl=length>=10 ? readU16(input) : readU8(input);
     switch (fl&3)
@@ -837,24 +815,30 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
   }
 }
 
-unsigned MSPUBParser97::getFirstLineOffset() const
+void MSPUBParser97::parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header)
 {
-  return 0x22;
-}
-
-unsigned MSPUBParser97::getSecondLineOffset() const
-{
-  return 0x2D;
-}
-
-unsigned MSPUBParser97::getShapeFillTypeOffset() const
-{
-  return 0x20;
-}
-
-unsigned MSPUBParser97::getShapeFillColorOffset() const
-{
-  return 0x18;
+  if (!header.hasData())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseClipPath: no data\n"));
+    return;
+  }
+  input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+  ListHeader2k listHeader;
+  if (!parseListHeader(input, header.m_endOffset, listHeader, false) || listHeader.m_dataSize!=8)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseClipPath: can not read the data zone\n"));
+    return;
+  }
+  if (listHeader.m_N<=0) return; // ok, no clip path
+  std::vector<Vertex> vertices;
+  vertices.reserve(size_t(listHeader.m_N));
+  for (int i=0; i<listHeader.m_N; ++i)
+  {
+    int x = translateCoordinateIfNecessary(readS32(input));
+    int y = translateCoordinateIfNecessary(readS32(input));
+    vertices.push_back({x,y});
+  }
+  m_collector->setShapeClipPath(seqNum, vertices);
 }
 
 void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
@@ -924,9 +908,6 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
 void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
-  if (m_version>3)
-    return MSPUBParser2k::parseShapeFormat(input, seqNum, header);
-
   if (header.m_type==C_Group)
     return;
   if (input->tell()+(m_version==2 ? 9 : 19)>header.m_dataOffset)
@@ -934,7 +915,9 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: the zone is too small\n"));
     return;
   }
-  input->seek(2, librevenge::RVNG_SEEK_CUR); // flags: 40=selected, 1=shadow
+  unsigned headerFlags=readU16(input); // flags: 1=shadow, 4=selected
+  if (headerFlags&0x18)
+    m_collector->setShapeWrapping(seqNum, ShapeInfo::W_Dynamic);
   unsigned colors[2];
   for (auto &c : colors) c=m_version<=2 ? readU8(input) : readU32(input);
   int patternId=int(readU8(input));
@@ -1000,6 +983,8 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       if (numRows && numCols)
         parseTableInfoData(input, seqNum, header, numCols, numRows, width, height);
     }
+    else if (header.m_type==C_Image)
+      parseClipPath(input, seqNum, header);
   }
   else if (header.m_type==C_CustomShape && input->tell()+12<=header.m_dataOffset)
   {
