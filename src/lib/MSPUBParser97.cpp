@@ -247,13 +247,14 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
         MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: unknown align=%d\n", align));
         break;
       }
+      // &20 tight/loose/...
     }
     if (tabPos>=5)
-      style.m_firstLineIndentEmu=readS16(input)*635;
+      style.m_rightIndentEmu=readU16(input)*635;
     if (tabPos>=7)
       style.m_leftIndentEmu=readU16(input)*635;
     if (tabPos>=9)
-      style.m_rightIndentEmu=readU16(input)*635;
+      style.m_firstLineIndentEmu=readS16(input)*635;
     if (tabPos>=11)
     {
       unsigned spacing=readU16(input);
@@ -428,30 +429,33 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
     int baseLine=readS8(input);
     style.superSubType = baseLine<0 ? SUBSCRIPT : baseLine>0 ? SUPERSCRIPT : NO_SUPER_SUB;
   }
-  if (length >= 8)
+  if (m_version<=2)
   {
-    if (m_version<=2)
+    if (length >= 8)
       style.colorIndex = getColorIndexByQuillEntry(readU8(input));
-    else
-      input->seek(1, librevenge::RVNG_SEEK_CUR);
-  }
-  if (length >= 9)
-  {
-    unsigned char fl1=readU8(input);
-    switch (fl1&3)
+    if (length >= 9)
     {
-    case 0: // none
-      break;
-    case 1:
-    case 2:
-      style.underline = Underline::Single;
-      break;
-    case 3:
-      style.underline = Underline::Double;
-      break;
+      unsigned fl=length>=10 ? readU16(input) : readU8(input);
+      switch (fl&3)
+      {
+      case 0: // none
+        break;
+      case 1:
+      case 2:
+        style.underline = Underline::Single;
+        break;
+      case 3:
+        style.underline = Underline::Double;
+        break;
+      }
+      auto spacing=(fl>>2)&0x1fff;
+      if (spacing&0x1000)
+        style.letterSpacingInPt=(double(spacing)-0x2000)/8;
+      else if (spacing)
+        style.letterSpacingInPt=double(spacing)/8;
     }
   }
-  if (length >= 16 && m_version>2)
+  else if (length >= 16)
   {
     input->seek(begin + 0xC, librevenge::RVNG_SEEK_SET);
     style.colorIndex = getColorIndexByQuillEntry(readU32(input));

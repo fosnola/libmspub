@@ -592,7 +592,7 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
 
 bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
 {
-  if (m_version>=5) return true; // TODO
+  if (m_version>=5) return true; // TODO: ptr size=4, font name in utf16
   for (auto id : m_fontChunkIndices)
   {
     auto const &chunk=m_contentChunks[id];
