@@ -11,6 +11,7 @@
 
 #include <cstdarg>
 #include <cstring>
+#include <memory>
 #include <string.h> // for memcpy
 
 #include <unicode/ucnv.h>

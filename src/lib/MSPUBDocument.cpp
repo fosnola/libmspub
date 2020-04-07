@@ -107,10 +107,6 @@ PUBAPI bool MSPUBDocument::isSupported(librevenge::RVNGInputStream *input)
       if (!quillStream)
         return false;
     }
-#ifndef DEBUG
-    if (version == MSPUB_1)
-      return false;
-#endif
     return true;
   }
   catch (...)
@@ -140,12 +136,8 @@ PUBAPI bool MSPUBDocument::parse(librevenge::RVNGInputStream *input, librevenge:
     switch (getVersion(input))
     {
     case MSPUB_1:
-#ifdef DEBUG
       parser.reset(new MSPUBParser91(input, &collector));
       break;
-#else
-      return false;
-#endif
     case MSPUB_2K:
     {
       std::unique_ptr<librevenge::RVNGInputStream> quillStream(input->getSubStreamByName("Quill/QuillSub/CONTENTS"));
