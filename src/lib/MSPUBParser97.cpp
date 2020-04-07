@@ -537,22 +537,55 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       m_collector->setShapeFlip(seqNum, true, false);
     if (flags&0x6)
     {
-      Arrow const begArrows[]=
+      Arrow const arrows[]=
       {
-        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // default
+        Arrow(NO_ARROW, MEDIUM, LARGE),
         Arrow(TRIANGLE_ARROW, MEDIUM, LARGE),
         Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM),
         Arrow(TRIANGLE_ARROW, MEDIUM, SMALL),
-        Arrow(LINE_ARROW, MEDIUM, LARGE),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 4:UNKNOWN
         Arrow(LINE_ARROW, MEDIUM, MEDIUM),
-        Arrow(LINE_ARROW, MEDIUM, SMALL)
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 6:UNKNOWN
+        Arrow(LINE_ARROW, MEDIUM, SMALL),
+        Arrow(KITE_ARROW, MEDIUM, LARGE),
+        Arrow(KITE_ARROW, MEDIUM, MEDIUM),
+        Arrow(ROTATED_SQUARE_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE1_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // c:UNKNOWN
+        Arrow(TRIANGLE1_ARROW, MEDIUM, SMALL),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // e:UNKNOWN
+        Arrow(FAT_LINE_ARROW, MEDIUM, MEDIUM),
+        Arrow(FAT_LINE_ARROW, MEDIUM, SMALL),
+        Arrow(BLOCK_ARROW, MEDIUM, LARGE),
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 12:UNKNOWN
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // 13:UNKNOWN
+        Arrow(TRIANGLE2_ARROW, MEDIUM, MEDIUM),
       };
-      int numArrows=int(MSPUB_N_ELEMENTS(begArrows));
-      int actArrow=(flags>>4)>numArrows ? 0 : (flags>>4);
+      int numArrows=int(MSPUB_N_ELEMENTS(arrows));
+      int begArrow=((flags>>4)&0x1f);
+      if (begArrow>=numArrows) begArrow=1;
+      int endArrow=((flags>>9)&0x1f);
+      if (endArrow>=numArrows) endArrow=1;
       if (flags&0x2)
-        m_collector->setShapeEndArrow(seqNum, begArrows[actArrow]);
+      {
+        m_collector->setShapeEndArrow(seqNum, arrows[begArrow]);
+        if (endArrow && (flags&0x4)==0)
+        {
+          Arrow finalArrow=arrows[endArrow];
+          finalArrow.m_flipY=true;
+          m_collector->setShapeBeginArrow(seqNum, finalArrow);
+        }
+      }
       if (flags&0x4)
-        m_collector->setShapeBeginArrow(seqNum, begArrows[actArrow]);
+      {
+        m_collector->setShapeBeginArrow(seqNum, arrows[begArrow]);
+        if (endArrow && (flags&0x2)==0)
+        {
+          Arrow finalArrow=arrows[endArrow];
+          finalArrow.m_flipY=true;
+          m_collector->setShapeEndArrow(seqNum, finalArrow);
+        }
+      }
     }
   }
   if (borderId>=0x8000)

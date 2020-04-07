@@ -21,7 +21,14 @@ enum ArrowStyle
   STEALTH_ANGLE_ARROW,
   ROTATED_SQUARE_ARROW,
   CIRCLE_ARROW,
-  LINE_ARROW
+  LINE_ARROW,
+
+  // mspub 2
+  KITE_ARROW=100,
+  FAT_LINE_ARROW,
+  BLOCK_ARROW,
+  TRIANGLE1_ARROW,
+  TRIANGLE2_ARROW
 };
 enum ArrowSize
 {
@@ -34,8 +41,9 @@ struct Arrow
   ArrowStyle m_style;
   ArrowSize m_width;
   ArrowSize m_height;
-  Arrow(ArrowStyle style, ArrowSize width, ArrowSize height) :
-    m_style(style), m_width(width), m_height(height)
+  bool m_flipY;
+  Arrow(ArrowStyle style, ArrowSize width, ArrowSize height, bool flipY=false) :
+    m_style(style), m_width(width), m_height(height), m_flipY(flipY)
   {
   }
   void addTo(librevenge::RVNGPropertyList &propList, bool start) const;
