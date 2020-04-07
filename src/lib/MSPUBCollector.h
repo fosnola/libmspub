@@ -184,6 +184,7 @@ private:
   bool m_encodingHeuristic;
   std::vector<unsigned char> m_allText;
   mutable boost::optional<const char *> m_calculatedEncoding;
+  mutable std::vector<const char *> m_fontsEncoding;
   librevenge::RVNGPropertyList m_metaData;
   mutable std::map<unsigned, librevenge::RVNGString> m_idToPageMasterNameMap;
 
@@ -220,6 +221,8 @@ private:
   double getSpecialValue(const ShapeInfo &info, const CustomShape &shape, int arg, const std::vector<int> &adjustValues) const;
   void ponderStringEncoding(const std::vector<TextParagraph> &str);
   const char *getCalculatedEncoding() const;
+  const char *getCalculatedEncoding(boost::optional<unsigned> fontIndex) const;
+  void createFontsEncoding() const;
 public:
   static librevenge::RVNGString getColorString(const Color &);
 };

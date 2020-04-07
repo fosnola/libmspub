@@ -14,6 +14,7 @@
 #include <math.h>
 #include <memory>
 #include <numeric>
+#include <string>
 
 #include <boost/multi_array.hpp>
 
@@ -456,28 +457,48 @@ void MSPUBCollector::setNextPage(unsigned pageSeqNum)
   m_pageSeqNumsOrdered.push_back(pageSeqNum);
 }
 
-MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter) :
-  m_painter(painter), m_contentChunkReferences(), m_width(0), m_height(0),
-  m_widthSet(false), m_heightSet(false),
-  m_numPages(0), m_textStringsById(), m_pagesBySeqNum(),
-  m_images(), m_borderImages(),
-  m_OLEs(),
-  m_textColors(), m_fonts(),
-  m_defaultCharStyles(), m_defaultParaStyles(), m_shapeTypesBySeqNum(),
-  m_paletteColors(), m_shapeSeqNumsOrdered(),
-  m_pageSeqNumsByShapeSeqNum(), m_bgShapeSeqNumsByPageSeqNum(),
-  m_skipIfNotBgSeqNums(),
-  m_currentShapeGroup(), m_topLevelShapes(),
-  m_groupsBySeqNum(), m_embeddedFonts(),
-  m_shapeInfosBySeqNum(), m_masterPages(),
-  m_shapesWithCoordinatesRotated90(),
-  m_masterPagesByPageSeqNum(),
-  m_tableCellTextEndsByTextId(), m_stringOffsetsByTextId(), m_tableCellStylesByTextId(),
-  m_calculationValuesSeen(), m_pageSeqNumsOrdered(),
-  m_encodingHeuristic(false), m_allText(),
-  m_calculatedEncoding(),
-  m_metaData(),
-  m_idToPageMasterNameMap()
+MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter)
+  : m_painter(painter)
+  , m_contentChunkReferences()
+  , m_width(0)
+  , m_height(0)
+  , m_widthSet(false)
+  , m_heightSet(false)
+  , m_numPages(0)
+  , m_textStringsById()
+  , m_pagesBySeqNum()
+  , m_images()
+  , m_borderImages()
+  , m_OLEs()
+  , m_textColors()
+  , m_fonts()
+  , m_defaultCharStyles()
+  , m_defaultParaStyles()
+  , m_shapeTypesBySeqNum()
+  , m_paletteColors()
+  , m_shapeSeqNumsOrdered()
+  , m_pageSeqNumsByShapeSeqNum()
+  , m_bgShapeSeqNumsByPageSeqNum()
+  , m_skipIfNotBgSeqNums()
+  , m_currentShapeGroup()
+  , m_topLevelShapes()
+  , m_groupsBySeqNum()
+  , m_embeddedFonts()
+  , m_shapeInfosBySeqNum()
+  , m_masterPages()
+  , m_shapesWithCoordinatesRotated90()
+  , m_masterPagesByPageSeqNum()
+  , m_tableCellTextEndsByTextId()
+  , m_stringOffsetsByTextId()
+  , m_tableCellStylesByTextId()
+  , m_calculationValuesSeen()
+  , m_pageSeqNumsOrdered()
+  , m_encodingHeuristic(false)
+  , m_allText()
+  , m_calculatedEncoding()
+  , m_fontsEncoding()
+  , m_metaData()
+  , m_idToPageMasterNameMap()
 {
 }
 
@@ -1027,7 +1048,7 @@ void MSPUBCollector::paintTextObject(const ShapeInfo &info, std::vector<TextPara
 
       librevenge::RVNGString textString;
       if (!line.spans[i_spans].chars.empty())
-        appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
+        appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding(line.spans[i_spans].style.fontIndex));
       if (i_spans==0 && hasDropStyle)
         textString=paintDropCap(textString, charProps,*paraStyle.m_dropCapStyle);
       m_painter->openSpan(charProps);
@@ -1061,6 +1082,7 @@ void MSPUBCollector::paintTable(const ShapeInfo &info, std::vector<TextParagraph
 
   ParagraphToCellMap_t paraToCellMap;
   ParagraphTexts_t paraTexts;
+  // change me use the font index to find the encoding
   mapTableTextToCells(text, tableCellTextEnds, getCalculatedEncoding(), paraToCellMap, paraTexts);
 
   unsigned numStyles=0;
@@ -1393,6 +1415,82 @@ const char *MSPUBCollector::getCalculatedEncoding() const
 csd_fail:
   ucsdet_close(ucd);
   return "windows-1252"; // Pretty likely to give garbage text, but it's the best we can do.
+}
+
+const char *MSPUBCollector::getCalculatedEncoding(boost::optional<unsigned> fontIndex) const
+{
+  if (m_fontsEncoding.empty())
+    createFontsEncoding();
+  if (!fontIndex || *fontIndex>=m_fontsEncoding.size())
+    return getCalculatedEncoding();
+  return m_fontsEncoding[*fontIndex];
+}
+
+void MSPUBCollector::createFontsEncoding() const
+{
+  if (!m_fontsEncoding.empty() || m_fonts.empty()) return;
+  auto defaultEncoding=getCalculatedEncoding();
+  if (!defaultEncoding) return;
+  if (strncmp("windows-125",defaultEncoding,11)!=0)
+  {
+    m_fontsEncoding.resize(m_fonts.size(),defaultEncoding);
+    return;
+  }
+  m_fontsEncoding.reserve(m_fonts.size());
+  for (auto font : m_fonts)
+  {
+    if (font.empty() || font.back()!=0) font.push_back(0);
+    auto len=font.size();
+    if (len<=4)
+    {
+      m_fontsEncoding.push_back(defaultEncoding);
+      continue;
+    }
+    std::string fName((char const *)font.data());
+    if (fName.length()!=--len)
+    {
+      m_fontsEncoding.push_back(defaultEncoding);
+      continue;
+    }
+    if (fName.back() == ')')
+    {
+      if (fName.find(" (HEBREW)", len-9) != std::string::npos ||
+          fName.find(" (Hebrew)", len-9) != std::string::npos ||
+          fName.find(" (hebrew)", len-9) != std::string::npos)
+        m_fontsEncoding.push_back("windows-1255");
+      else if (fName.find(" (ARABIC)", len-9) != std::string::npos ||
+               fName.find(" (Arabic)", len-9) != std::string::npos ||
+               fName.find(" (arabic)", len-9) != std::string::npos)
+        m_fontsEncoding.push_back("windows-1256");
+      else if (len > 13 && (fName.find(" (VIETNAMESE)", len-13) != std::string::npos ||
+                            fName.find(" (Vietnamese)", len-13) != std::string::npos ||
+                            fName.find(" (vietnamese)", len-13) != std::string::npos))
+        m_fontsEncoding.push_back("windows-1258");
+      else
+        m_fontsEncoding.push_back(defaultEncoding);
+    }
+    // change check also Symbol, Wingdings 3
+    if (fName == "Baltica" || fName == "Pragmatica")
+      m_fontsEncoding.push_back("windows-1251");
+    else if (len > 4 && (fName.find(" CYR", len-4) != std::string::npos ||
+                         fName.find(" Cyr", len-4) != std::string::npos ||
+                         fName.find(" cyr", len-4) != std::string::npos))
+      m_fontsEncoding.push_back("windows-1251");
+    else if (len > 3 && (fName.find(" CE", len-3) != std::string::npos ||
+                         fName.find(" Ce", len-3) != std::string::npos ||
+                         fName.find(" ce", len-3) != std::string::npos))
+      m_fontsEncoding.push_back("windows-1250");
+    else if (len > 6 && (fName.find(" GREEK", len-6) != std::string::npos ||
+                         fName.find(" Greek", len-6) != std::string::npos ||
+                         fName.find(" greek", len-6) != std::string::npos))
+      m_fontsEncoding.push_back("windows-1253");
+    else if (len > 4 && (fName.find(" TUR", len-4) != std::string::npos ||
+                         fName.find(" Tur", len-4) != std::string::npos ||
+                         fName.find(" tur", len-4) != std::string::npos))
+      m_fontsEncoding.push_back("windows-1254");
+    else
+      m_fontsEncoding.push_back(defaultEncoding);
+  }
 }
 
 void MSPUBCollector::setShapeLineBackColor(unsigned shapeSeqNum,
