@@ -880,7 +880,6 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       {
         graphicsProps.insert("draw:stroke", "solid");
       }
-      m_painter->setStyle(graphicsProps);
       writeCustomShape(type, graphicsProps, m_painter, x, y, height, width,
                        false, foldedTransform, lines,
                        std::bind(
