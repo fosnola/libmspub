@@ -300,9 +300,13 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       std::vector<TextSpan> paraSpans;
       CharacterStyle charStyle;
       ParagraphStyle paraStyle;
-      auto pIt=posToParaMap.find(input->tell()-1);
-      if (pIt!=posToParaMap.end())
-        paraStyle=pIt->second;
+      // sometimes the paragraph is defined in pos-1, so let check
+      auto pIt=posToParaMap.lower_bound(input->tell());
+      if (pIt!=posToParaMap.begin())
+      {
+        --pIt;
+        if (pIt->first>=input->tell()-2) paraStyle=pIt->second;
+      }
       for (unsigned p=textLimits[i]; p<textLimits[i+1]; ++p)
       {
         auto cIt=posToSpanMap.find(input->tell());
@@ -774,7 +778,7 @@ bool MSPUBParser91::parseShape(librevenge::RVNGInputStream *input, BlockInfo91 c
   if (width>0)
   {
     m_collector->addShapeLine(info.m_id, Line(getColor(colors[2]), width*12700, true));
-    if (borderId>0)  // -1: none, 0: classic
+    if (borderId>=0 && (flags&4))
     {
       m_collector->setShapeBorderImageId(info.m_id, unsigned(borderId));
       m_collector->setShapeBorderPosition(info.m_id, OUTSIDE_SHAPE);
@@ -953,6 +957,9 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
   listPos.insert(header.m_dataOffset+header.m_lastValue);
   for (size_t i=0; i<header.m_positions.size(); ++i)
   {
+    // position=0xffff means none, so must check this
+    if (header.m_positions[i]>header.m_dataOffset+header.m_lastValue) continue;
+
     auto it=listPos.find(header.m_positions[i]);
     if (it==listPos.end() || ++it==listPos.end())
     {
@@ -960,32 +967,56 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       continue;
     }
     auto endPos=*it;
-    unsigned long toRead=endPos-header.m_positions[i]-66;
-    if (toRead<4)
+    if (endPos<66+header.m_positions[i]+4)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseBorderArts: art zone %d seems to short\n",int(i)));
       continue;
     }
-    // check that we have a picture
-    input->seek(header.m_positions[i]+66, librevenge::RVNG_SEEK_SET);
-    unsigned headerVals[2];
-    for (auto &val : headerVals) val=readU16(input);
-    if (headerVals[0]<1 || headerVals[0]>2 || headerVals[1]<9 || headerVals[1]>10)
+    input->seek(header.m_positions[i]+50, librevenge::RVNG_SEEK_SET);
+    unsigned decal[8];
+    for (auto &d : decal) d = readU16(input);
+    std::map<unsigned, unsigned> offsetToImage;
+    for (int off=0; off<8; ++off)
     {
-      MSPUB_DEBUG_MSG(("MSPUBParser91::parseBorderArts: can not find the wmf picture for art zone %d\n",int(i)));
-      continue;
+      auto oIt=offsetToImage.find(decal[off]);
+      if (oIt!=offsetToImage.end())
+      {
+        m_collector->setBorderImageOffset(i,oIt->second);
+        std::cout << "ADD " << oIt->second << "\n";
+        continue;
+      }
+      input->seek(header.m_positions[i]+decal[off], librevenge::RVNG_SEEK_SET);
+      // check that we have a picture
+      unsigned headerVals[2];
+      for (auto &val : headerVals) val=readU16(input);
+      if (headerVals[0]<1 || headerVals[0]>2 || headerVals[1]<9 || headerVals[1]>10)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser91::parseBorderArts: can not find the wmf picture for art zone %d\n",int(i)));
+        continue;
+      }
+      input->seek(2, librevenge::RVNG_SEEK_CUR);
+      unsigned pictSize=readU32(input);
+      if (pictSize<9 || header.m_positions[i]+decal[off]+2*pictSize>endPos)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser91::parseBorderArts: art zone %d pictSize seems bad\n",int(i)));
+        continue;
+      }
+      // ok, let save the picure
+      pictSize*=2;
+      input->seek(header.m_positions[i]+decal[off], librevenge::RVNG_SEEK_SET);
+      librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, i));
+      while (pictSize > 0 && stillReading(input, (unsigned long)-1))
+      {
+        unsigned long howManyRead = 0;
+        const unsigned char *buf = input->read(pictSize, howManyRead);
+        img.append(buf, howManyRead);
+        pictSize -= howManyRead;
+      }
+      unsigned newId=offsetToImage.size();
+      m_collector->setBorderImageOffset(i,newId);
+      offsetToImage[decal[off]]=newId;
+      std::cout << "ADD " << newId << "\n";
     }
-    // ok, let save the picure
-    input->seek(header.m_positions[i]+66, librevenge::RVNG_SEEK_SET);
-    librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, i));
-    while (toRead > 0 && stillReading(input, (unsigned long)-1))
-    {
-      unsigned long howManyRead = 0;
-      const unsigned char *buf = input->read(toRead, howManyRead);
-      img.append(buf, howManyRead);
-      toRead -= howManyRead;
-    }
-    m_collector->setBorderImageOffset(i,0);
   }
   return true;
 }
