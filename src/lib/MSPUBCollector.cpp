@@ -478,7 +478,8 @@ MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter) :
   m_calculationValuesSeen(), m_pageSeqNumsOrdered(),
   m_encodingHeuristic(false), m_allText(),
   m_calculatedEncoding(),
-  m_metaData()
+  m_metaData(),
+  m_idToPageMasterNameMap()
 {
 }
 
@@ -1773,36 +1774,49 @@ boost::optional<unsigned> MSPUBCollector::getMasterPageSeqNum(unsigned pageSeqNu
   return toReturn;
 }
 
-void MSPUBCollector::writePage(unsigned pageSeqNum) const
+void MSPUBCollector::writePage(unsigned pageSeqNum, bool isMaster) const
 {
-  const PageInfo &pageInfo = m_pagesBySeqNum.find(pageSeqNum)->second;
+  auto pIt=m_pagesBySeqNum.find(pageSeqNum);
+  if (pIt==m_pagesBySeqNum.end())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBCollector::writePage: can not find page %x\n", pageSeqNum));
+    return;
+  }
+
+  const PageInfo &pageInfo = pIt->second;
+  const auto &shapeGroupsOrdered = pageInfo.m_shapeGroupsOrdered;
+  if (shapeGroupsOrdered.empty() && !getIfExists_const(m_bgShapeSeqNumsByPageSeqNum, pageSeqNum)) return;
+
   librevenge::RVNGPropertyList pageProps;
   if (m_widthSet)
-  {
     pageProps.insert("svg:width", m_width);
-  }
   if (m_heightSet)
-  {
     pageProps.insert("svg:height", m_height);
-  }
-  const auto &shapeGroupsOrdered = pageInfo.m_shapeGroupsOrdered;
-  if (!shapeGroupsOrdered.empty())
+  if (isMaster) addPageMasterName(pageSeqNum, pageProps, true);
+
+  boost::optional<unsigned> masterSeqNum = getMasterPageSeqNum(pageSeqNum);
+  auto hasMaster = !isMaster && bool(masterSeqNum);
+  if (hasMaster && !getIfExists_const(m_bgShapeSeqNumsByPageSeqNum, pageSeqNum))
   {
-    m_painter->startPage(pageProps);
-    boost::optional<unsigned> masterSeqNum = getMasterPageSeqNum(pageSeqNum);
-    auto hasMaster = bool(masterSeqNum);
-    if (hasMaster)
-    {
-      writePageBackground(masterSeqNum.get());
-    }
-    writePageBackground(pageSeqNum);
-    if (hasMaster)
-    {
-      writePageShapes(masterSeqNum.get());
-    }
-    writePageShapes(pageSeqNum);
-    m_painter->endPage();
+    addPageMasterName(*masterSeqNum, pageProps, false);
+    hasMaster=false;
   }
+  if (isMaster)
+    m_painter->startMasterPage(pageProps);
+  else
+    m_painter->startPage(pageProps);
+
+  if (hasMaster)
+    writePageBackground(masterSeqNum.get());
+  writePageBackground(pageSeqNum);
+  if (hasMaster)
+    writePageShapes(masterSeqNum.get());
+  writePageShapes(pageSeqNum);
+
+  if (isMaster)
+    m_painter->endMasterPage();
+  else
+    m_painter->endPage();
 }
 
 void MSPUBCollector::writePageShapes(unsigned pageSeqNum) const
@@ -1848,6 +1862,21 @@ bool MSPUBCollector::pageIsMaster(unsigned pageSeqNum) const
   return m_masterPages.find(pageSeqNum) != m_masterPages.end();
 }
 
+void MSPUBCollector::addPageMasterName(unsigned pageNum, librevenge::RVNGPropertyList &propList, bool createIsNeeded) const
+{
+  auto it=m_idToPageMasterNameMap.find(pageNum);
+  if (it!=m_idToPageMasterNameMap.end())
+  {
+    propList.insert("librevenge:master-page-name", it->second);
+    return;
+  }
+  if (!createIsNeeded) return;
+  librevenge::RVNGString masterName;
+  masterName.sprintf("PM%d", int(pageNum));
+  propList.insert("librevenge:master-page-name", masterName);
+  m_idToPageMasterNameMap[pageNum]=masterName;
+}
+
 bool MSPUBCollector::go()
 {
   addBlackToPaletteIfNecessary();
@@ -1863,30 +1892,40 @@ bool MSPUBCollector::go()
     props.insert("office:binary-data",i->m_blob);
     m_painter->defineEmbeddedFont(props);
   }
-
+  // create the list of pages
+  std::vector<unsigned> pageList;
   if (m_pageSeqNumsOrdered.empty())
   {
-    for (std::map<unsigned, PageInfo>::const_iterator i = m_pagesBySeqNum.begin();
-         i != m_pagesBySeqNum.end(); ++i)
+    pageList.reserve(m_pagesBySeqNum.size());
+    for (auto const &it : m_pagesBySeqNum)
     {
-      if (!pageIsMaster(i->first))
-      {
-        writePage(i->first);
-      }
+      if (!pageIsMaster(it.first))
+        pageList.push_back(it.first);
     }
   }
   else
   {
+    pageList.reserve(m_pageSeqNumsOrdered.size());
     for (unsigned int i : m_pageSeqNumsOrdered)
     {
-      std::map<unsigned, PageInfo>::const_iterator iter =
-        m_pagesBySeqNum.find(i);
-      if (iter != m_pagesBySeqNum.end() && !pageIsMaster(iter->first))
-      {
-        writePage(iter->first);
-      }
+      if (m_pagesBySeqNum.find(i) != m_pagesBySeqNum.end())
+        pageList.push_back(i);
     }
   }
+  // create the master pages
+  std::set<unsigned> masterSet;
+  for (unsigned int i : pageList)
+  {
+    auto masterSeqNum = getMasterPageSeqNum(i);
+    // no master or a page background, we can not use the master page
+    if (!masterSeqNum || getIfExists_const(m_bgShapeSeqNumsByPageSeqNum, i)) continue;
+    if (masterSet.find(*masterSeqNum)!=masterSet.end()) continue;
+    writePage(*masterSeqNum, true);
+    masterSet.insert(*masterSeqNum);
+  }
+  // create the pages
+  for (unsigned int i : pageList)
+    writePage(i, false);
   m_painter->endDocument();
   return true;
 }

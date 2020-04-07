@@ -179,6 +179,7 @@ private:
   std::vector<unsigned char> m_allText;
   mutable boost::optional<const char *> m_calculatedEncoding;
   librevenge::RVNGPropertyList m_metaData;
+  mutable std::map<unsigned, librevenge::RVNGString> m_idToPageMasterNameMap;
 
   // helper functions
   std::vector<int> getShapeAdjustValues(const ShapeInfo &info) const;
@@ -188,13 +189,14 @@ private:
   void setupShapeStructures(ShapeGroupElement &elt);
   void addBlackToPaletteIfNecessary();
   void assignShapesToPages();
-  void writePage(unsigned pageSeqNum) const;
+  void writePage(unsigned pageSeqNum, bool isMaster) const;
   void writePageShapes(unsigned pageSeqNum) const;
   void writePageBackground(unsigned pageSeqNum) const;
   void writeImage(double x, double y, double height, double width,
                   ImgType type, const librevenge::RVNGBinaryData &blob,
                   boost::optional<Color> oneBitColor) const;
   bool pageIsMaster(unsigned pageSeqNum) const;
+  void addPageMasterName(unsigned pageNum, librevenge::RVNGPropertyList &propList, bool createIsNeeded) const;
 
   std::function<void(void)> paintShape(const ShapeInfo &info, const Coordinate &relativeTo, const VectorTransformation2D &foldedTransform, bool isGroup, const VectorTransformation2D &thisTransform) const;
   double getCalculationValue(const ShapeInfo &info, unsigned index, bool recursiveEntry, const std::vector<int> &adjustValues) const;
