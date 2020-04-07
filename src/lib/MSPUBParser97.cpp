@@ -531,11 +531,23 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
     }
   }
-  else if (header.m_type==C_StandartShape)
+  else if (header.m_type==C_CustomShape)
   {
-    ShapeType shapeType = getShapeType(readU8(input));
+    ShapeType shapeType = getShapeType(readU16(input));
     if (shapeType != UNKNOWN_SHAPE)
+    {
       m_collector->setShapeType(seqNum, shapeType);
+      /*
+      for (int i=0; i<4; ++i)
+        m_collector->setAdjustValue(seqNum, i, readS16(input));
+      */
+    }
+    auto flags=readU16(input);
+    if (flags&3)
+      m_collector->setShapeFlip(seqNum, flags&1, flags&2);
+    int rot=(flags>>2)&3;
+    if (rot)
+      m_collector->setShapeRotation(seqNum,360-90*rot);
   }
   else if (header.m_type==C_Line)
   {

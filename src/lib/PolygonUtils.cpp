@@ -5242,6 +5242,226 @@ const CustomShape CS_ACTION_BUTTON_MOVIE(
   21600, 21600,
   nullptr, 0);
 
+// MS publisher 2
+const Vertex GENERAL_TRIANGLE_VERTICES[] =
+{
+  {0, 21600}, {21600, 10800}, {10800, 0}, {0, 21600}
+};
+
+const CustomShape CS_GENERAL_TRIANGLE(
+  GENERAL_TRIANGLE_VERTICES, sizeof(GENERAL_TRIANGLE_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex TILTED_TRAPEZOID_VERTICES[] =
+{
+  {0, 21600}, {0, 10800}, {10800, 0}, {21600, 0}, {0, 21600}
+};
+
+const CustomShape CS_TILTED_TRAPEZOID(
+  TILTED_TRAPEZOID_VERTICES, sizeof(TILTED_TRAPEZOID_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex PENTAGON_UP_VERTICES[] =
+{
+  {0, 21600}, {21600, 21600}, { 21600, 7200}, {10800, 0}, {0, 7200}, {0, 21600}
+};
+
+const CustomShape CS_PENTAGON_UP(
+  PENTAGON_UP_VERTICES, sizeof(PENTAGON_UP_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex CHEVRON_UP_VERTICES[] =
+{
+  {0, 21600}, {10800, 14400}, {21600, 21600}, {21600, 7200}, {10800,0}, {0, 7200},  {0, 21600}
+};
+
+const CustomShape CS_CHEVRON_UP(
+  CHEVRON_UP_VERTICES, sizeof(CHEVRON_UP_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex PIE_VERTICES[] =
+{
+  {21600, 21600}, {0,0}, {10800, 0 },  {21600, 10800 }, {10800, 10800}
+};
+
+const unsigned short PIE_SEGMENTS[] =
+{
+  0xA304, 0x0001, 0x6000//0x4001, 0x0002, 0xA203, 0x8000
+};
+
+const CustomShape CS_PIE(
+  PIE_VERTICES, sizeof(PIE_VERTICES) / sizeof(Vertex),
+  PIE_SEGMENTS, sizeof(PIE_SEGMENTS) / sizeof(unsigned short),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex CHORD_VERTICES[] =
+{
+  {21600, 21600}, {0,0},  {3163, 3163 }, {18436, 18436 }
+};
+
+const unsigned short CHORD_SEGMENTS[] =
+{
+  0xA304, 0x6000
+};
+
+const CustomShape CS_CHORD(
+  CHORD_VERTICES, sizeof(CHORD_VERTICES) / sizeof(Vertex),
+  CHORD_SEGMENTS, sizeof(CHORD_SEGMENTS) / sizeof(unsigned short),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex NOTCHED_RECTANGLE_VERTICES[] =
+{
+  {0, 21600}, {21600, 21600}, {21600, 10800}, {10800, 10800}, {10800, 0}, {0,0}, {0, 21600}
+};
+
+const CustomShape CS_NOTCHED_RECTANGLE(
+  NOTCHED_RECTANGLE_VERTICES, sizeof(NOTCHED_RECTANGLE_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex NOTCHED_TRIANGLE_VERTICES[] =
+{
+  {0, 21600}, {7200, 14400}, {7200, 7200}, {14400, 7200}, {21600, 0}, {0, 0}, {0, 21600}
+};
+
+const CustomShape CS_NOTCHED_TRIANGLE(
+  NOTCHED_TRIANGLE_VERTICES, sizeof(NOTCHED_TRIANGLE_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex W_SHAPE_VERTICES[] =
+{
+  {0,0}, {0, 21600}, {7200, 21600}, {7200, 16000}, {7200, 21600},
+  {14400, 21600}, {14400, 16000}, {14400, 21600}, {21600, 21600}, {21600, 0}
+};
+
+const unsigned short W_SHAPE_SEGMENTS[] =
+{
+  0x000A
+};
+
+const CustomShape CS_W_SHAPE(
+  W_SHAPE_VERTICES, sizeof(W_SHAPE_VERTICES) / sizeof(Vertex),
+  W_SHAPE_SEGMENTS, sizeof(W_SHAPE_SEGMENTS) / sizeof(unsigned short),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex ROUND_RECT_CALLOUT_2K_VERTICES[] =
+{
+  {0, 0}, {0, 17000}, { 4000, 17000}, { 12000, 21600 }, { 8000, 17000}, {21600, 17000},
+  {21600, 0}, {0, 0}
+};
+
+const CustomShape CS_ROUND_RECT_CALLOUT_2K(
+  ROUND_RECT_CALLOUT_2K_VERTICES, sizeof(ROUND_RECT_CALLOUT_2K_VERTICES) / sizeof(Vertex),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex OVAL_CALLOUT_2K_VERTICES[] =
+{
+  { 10000, 17000 }, {0, 0}, {4000, 0}, { 4000, 17000},
+  { 4000, 17000 }, { 12000, 21600 }, { 8000, 17000}, { 17600, 17000},
+  { 10000, 17000 }, {21600, 0}, { 17600, 17000},  {17600, 0}
+};
+
+const unsigned short OVAL_CALLOUT_2K_SEGMENTS[] =
+{
+  0xA304, 0x0004, 0xA304, 0x6000
+};
+
+const CustomShape CS_OVAL_CALLOUT_2K(
+  OVAL_CALLOUT_2K_VERTICES, sizeof(OVAL_CALLOUT_2K_VERTICES) / sizeof(Vertex),
+  OVAL_CALLOUT_2K_SEGMENTS, sizeof(OVAL_CALLOUT_2K_SEGMENTS) / sizeof(unsigned short),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex MOON_2_VERTICES[] =
+{
+  { 0, 14400 }, {21600, 28800 }, { 0, 21600 }, { 21600, 21600}, { 21600, 7200},
+  { 0, -7200 }, {21600, 14400 }, { 21600, 7200}, {0, 7200}
+};
+
+const unsigned short MOON_2_SEGMENTS[] =
+{
+  0xA504, 0x0001, 0xA304, 0x6000
+};
+
+const CustomShape CS_MOON_2(
+  MOON_2_VERTICES, sizeof(MOON_2_VERTICES) / sizeof(Vertex),
+  MOON_2_SEGMENTS, sizeof(MOON_2_SEGMENTS) / sizeof(unsigned short),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+const Vertex BLOCK_ARC_2_VERTICES[] =
+{
+  { 0, 0 }, {21600, 28800 }, { 2000, 21600 }, { 19600, 21600}, { 16200, 17600},
+  { 4200, 4200 }, {17400, 24600 }, { 16200, 17600}, {6000, 17600}
+};
+
+const unsigned short BLOCK_ARC_2_SEGMENTS[] =
+{
+  0xA504, 0x0001, 0xA304, 0x6000
+};
+
+const CustomShape CS_BLOCK_ARC_2(
+  BLOCK_ARC_2_VERTICES, sizeof(BLOCK_ARC_2_VERTICES) / sizeof(Vertex),
+  BLOCK_ARC_2_SEGMENTS, sizeof(BLOCK_ARC_2_SEGMENTS) / sizeof(unsigned short),
+  nullptr, 0,
+  nullptr, 0,
+  nullptr, 0,
+  21600, 21600,
+  nullptr, 0);
+
+
 const CustomShape *getCustomShape(ShapeType type)
 {
   switch (type)
@@ -5571,6 +5791,33 @@ const CustomShape *getCustomShape(ShapeType type)
     return &CS_ACTION_BUTTON_SOUND;
   case ACTION_BUTTON_MOVIE:
     return &CS_ACTION_BUTTON_MOVIE;
+  // MSPublisher 2
+  case GENERAL_TRIANGLE:
+    return &CS_GENERAL_TRIANGLE;
+  case TILTED_TRAPEZOID:
+    return &CS_TILTED_TRAPEZOID;
+  case CHORD:
+    return &CS_CHORD;
+  case PIE:
+    return &CS_PIE;
+  case PENTAGON_UP:
+    return &CS_PENTAGON_UP;
+  case CHEVRON_UP:
+    return &CS_CHEVRON_UP;
+  case NOTCHED_RECTANGLE:
+    return &CS_NOTCHED_RECTANGLE;
+  case NOTCHED_TRIANGLE:
+    return &CS_NOTCHED_TRIANGLE;
+  case W_SHAPE:
+    return &CS_W_SHAPE;
+  case ROUND_RECT_CALLOUT_2K:
+    return &CS_ROUND_RECT_CALLOUT_2K;
+  case OVAL_CALLOUT_2K:
+    return &CS_OVAL_CALLOUT_2K;
+  case MOON_2:
+    return &CS_MOON_2;
+  case BLOCK_ARC_2:
+    return &CS_BLOCK_ARC_2;
   default:
     return nullptr;
   }

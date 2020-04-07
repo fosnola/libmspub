@@ -179,7 +179,22 @@ enum ShapeType
   ACTION_BUTTON_DOCUMENT        = 198,
   ACTION_BUTTON_SOUND           = 199,
   ACTION_BUTTON_MOVIE           = 200,
-  TEXT_BOX            = 202
+  TEXT_BOX            = 202,
+
+  // ms publisher 2
+  GENERAL_TRIANGLE=1000,
+  TILTED_TRAPEZOID,
+  PIE,
+  NOTCHED_TRIANGLE,
+  CHORD,
+  NOTCHED_RECTANGLE,
+  CHEVRON_UP,
+  PENTAGON_UP,
+  W_SHAPE,
+  ROUND_RECT_CALLOUT_2K,
+  OVAL_CALLOUT_2K,
+  MOON_2,
+  BLOCK_ARC_2
 };
 } // libmspub
 #endif /* INCLUDED_SHAPETYPE_H */

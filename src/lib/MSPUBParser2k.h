@@ -27,7 +27,7 @@ class MSPUBParser2k : public MSPUBParser
 public:
   enum ChunkType2k
   {
-    C_Text /* 0 or 8*/, C_Image, C_OLE, C_Line, C_Rect, C_StandartShape, C_Ellipse,
+    C_Text /* 0 or 8*/, C_Image, C_OLE, C_Line, C_Rect, C_CustomShape, C_Ellipse,
     C_Group, C_Document, C_Page, C_Unknown
   };
   struct ChunkHeader2k
@@ -47,7 +47,7 @@ public:
     }
     bool isShape() const
     {
-      return isRectangle() || m_type==C_Line || m_type==C_StandartShape;
+      return isRectangle() || m_type==C_Line || m_type==C_CustomShape;
     }
     unsigned headerLength() const
     {
