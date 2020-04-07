@@ -308,7 +308,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       if (pIt!=posToParaMap.begin())
       {
         --pIt;
-        if (pIt->first>=input->tell()-2 && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
+        if (pIt->first>=unsigned(input->tell()-2) && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
       }
       unsigned oldParaPos=0; // used to check for empty line
       for (unsigned p=textLimits[i]; p<textLimits[i+1]; ++p)
@@ -924,7 +924,7 @@ bool MSPUBParser91::parseOLEPicture(librevenge::RVNGInputStream *input, unsigned
   {
     auto sSz=readU32(input);
     if (sSz==0) continue;
-    if (endPos-input->tell()<sSz+4)
+    if (endPos-unsigned(input->tell())<sSz+4)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseOLEPicture: can not read a name\n"));
       return false;

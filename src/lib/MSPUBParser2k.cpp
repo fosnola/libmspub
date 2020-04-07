@@ -783,7 +783,7 @@ bool MSPUBParser2k::parseBorderArts(librevenge::RVNGInputStream *input)
 bool MSPUBParser2k::parseBorderArt(librevenge::RVNGInputStream *input, unsigned borderNum, unsigned endPos)
 {
   auto begPos=input->tell();
-  if (begPos+66+4>endPos)
+  if (unsigned(begPos+66+4)>endPos)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseBorderArt: art zone %d seems to short\n",int(borderNum)));
     return false;
