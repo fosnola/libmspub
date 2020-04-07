@@ -253,8 +253,8 @@ unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k) const
   }
   switch ((ref2k >> 24) & 0xFF)
   {
-  case 0xC0: //index into user palette
-  case 0xE0:
+  case 0xC0: // C0 <modifier> 00 <index into user palette> in v98
+  case 0xE0: //index into user palette
     return (ref2k & 0xFF) | (0x08 << 24);
   default:
   {
@@ -277,6 +277,7 @@ ColorReference MSPUBParser2k::getColorReferenceByIndex(unsigned ref2k) const
 }
 
 //FIXME: Valek found different values; what does this depend on?
+//       osnola: seems ok at least for v2...v98 files
 ShapeType MSPUBParser2k::getShapeType(unsigned char shapeSpecifier)
 {
   switch (shapeSpecifier)
@@ -409,7 +410,7 @@ void MSPUBParser2k::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
   ti.m_rowHeightsInEmu.resize(size_t(numRows),height/numRows);
   ti.m_columnWidthsInEmu.resize(size_t(numCols),width/numCols);
 
-  // TODO find the overriden/diagonal cell...
+  // TODO find the overriden/diagonal cell, probably stored in Quill...
   for (unsigned r=0; r<numRows; r++)
   {
     CellInfo cellInfo;
@@ -585,6 +586,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     const ContentChunkReference &chunk = m_contentChunks.at(paletteChunkIndex);
     input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
     input->seek(0xA0, librevenge::RVNG_SEEK_CUR);
+    // CHANGEME: call parseListHeader and check that 8 colors are really defined
     for (unsigned j = 0; j < 8; ++j)
     {
       unsigned hex = readU32(input);
@@ -1095,7 +1097,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
-  if (m_version>=5 && (m_version>5 || (header.m_fileType>8 && header.m_fileType!=0xa)))
+  if (m_version>=6)
   {
     // REMOVEME: old code
     parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
