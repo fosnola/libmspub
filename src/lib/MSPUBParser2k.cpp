@@ -71,7 +71,9 @@ bool MSPUBParser2k::getChunkReference(unsigned seqNum, ContentChunkReference &ch
 // Takes a line width specifier in Pub2k format and translates it into quarter points
 static unsigned short translateLineWidth(unsigned char lineWidth)
 {
-  return (lineWidth&0x80) ? (lineWidth&0x7f) : 4*lineWidth;
+  if (lineWidth&0x80)
+    return static_cast<unsigned short>(lineWidth&0x7f);
+  return static_cast<unsigned short>(4*int(lineWidth));
 }
 
 Color MSPUBParser2k::getColorBy2kHex(unsigned hex)
