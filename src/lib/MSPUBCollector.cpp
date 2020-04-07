@@ -38,6 +38,11 @@
 namespace libmspub
 {
 
+struct TextLineState
+{
+  boost::optional<ListInfo> m_list;
+};
+
 using namespace std::placeholders;
 
 namespace
@@ -967,15 +972,19 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
 
             if (tableLayout[row][col].m_cell < paraToCellMap.size())
             {
+              TextLineState state;
               const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[tableLayout[row][col].m_cell];
               for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
               {
                 librevenge::RVNGPropertyList paraProps = getParaStyleProps(text[para].style, text[para].style.m_defaultCharStyleIndex);
-                m_painter->openParagraph(paraProps);
+                openTextLine(state, paraProps, text[para].style.m_listInfo);
+                auto const &paraLetterSpacing=text[para].style.m_letterSpacingInPt;
 
                 for (size_t i_spans = 0; i_spans < paraTexts[para].size(); ++i_spans)
                 {
                   librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
+                  if (paraLetterSpacing && !charProps["fo:letter-spacing"])
+                    charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
                   m_painter->openSpan(charProps);
                   if (text[para].spans[i_spans].field)
                   {
@@ -987,8 +996,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
                     separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
                   m_painter->closeSpan();
                 }
-
-                m_painter->closeParagraph();
+                closeTextLine(state, para == cellParas.second);
               }
             }
 
@@ -1037,16 +1045,22 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
           props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
       }
       m_painter->startTextObject(props);
-      for (const auto &line : text)
+      TextLineState state;
+      for (size_t i=0; i<text.size(); ++i)
       {
+        const auto &line = text[i];
         librevenge::RVNGPropertyList paraProps = getParaStyleProps(line.style, line.style.m_defaultCharStyleIndex);
-        m_painter->openParagraph(paraProps);
+        openTextLine(state, paraProps, line.style.m_listInfo);
+        auto const &paraLetterSpacing=line.style.m_letterSpacingInPt;
+
         for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
         {
           librevenge::RVNGString textString;
           if (!line.spans[i_spans].chars.empty())
             appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
           librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
+          if (paraLetterSpacing && !charProps["fo:letter-spacing"])
+            charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
           m_painter->openSpan(charProps);
           if (line.spans[i_spans].field)
           {
@@ -1058,7 +1072,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
             separateSpacesAndInsertText(m_painter, textString);
           m_painter->closeSpan();
         }
-        m_painter->closeParagraph();
+        closeTextLine(state, i+1==text.size());
       }
       m_painter->endTextObject();
     }
@@ -1068,6 +1082,49 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     m_painter->endLayer();
   }
   return &no_op;
+}
+
+void MSPUBCollector::openTextLine(TextLineState &state, librevenge::RVNGPropertyList const &lineProps, boost::optional<ListInfo> const &list) const
+{
+  if (!list)
+  {
+    if (state.m_list) closeTextList(state);
+    m_painter->openParagraph(lineProps);
+    return;
+  }
+  if (state.m_list && !list->isCompatibleWith(*state.m_list)) closeTextList(state);
+  if (!state.m_list)
+  {
+    librevenge::RVNGPropertyList level;
+    list->addTo(level);
+    if (list->m_listType==ORDERED)
+      m_painter->openOrderedListLevel(level);
+    else
+      m_painter->openUnorderedListLevel(level);
+    state.m_list=list;
+  }
+  m_painter->openListElement(lineProps);
+}
+
+void MSPUBCollector::closeTextLine(TextLineState &state, bool lastLine) const
+{
+  if (!state.m_list)
+    m_painter->closeParagraph();
+  else
+  {
+    m_painter->closeListElement();
+    if (lastLine) closeTextList(state);
+  }
+}
+
+void MSPUBCollector::closeTextList(TextLineState &state) const
+{
+  if (!state.m_list) return;
+  if (state.m_list->m_listType==ORDERED)
+    m_painter->closeOrderedListLevel();
+  else
+    m_painter->closeUnorderedListLevel();
+  state.m_list.reset();
 }
 
 bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &coord) const
@@ -1577,14 +1634,18 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
                             defaultStyle.m_dropCapLines.get_value_or(0));
   if (dropCapLines != 0)
   {
-    ret.insert("style:drop-cap", (int)dropCapLines);
+    // Drop caps are not supported in LibreOffice ...
+    librevenge::RVNGPropertyList dropProp;
+    dropProp.insert("style:lines", (int)dropCapLines);
+    unsigned dropCapLetters = style.m_dropCapLetters.get_value_or(
+                                defaultStyle.m_dropCapLetters.get_value_or(0));
+    if (dropCapLetters != 0)
+      dropProp.insert("style:length", (int)dropCapLetters);
+    librevenge::RVNGPropertyListVector dropPropVector;
+    dropPropVector.append(dropProp);
+    ret.insert("style:drop-cap", dropPropVector);
   }
-  unsigned dropCapLetters = style.m_dropCapLetters.get_value_or(
-                              defaultStyle.m_dropCapLetters.get_value_or(0));
-  if (dropCapLetters != 0)
-  {
-    ret.insert("style:length", (int)dropCapLetters);
-  }
+
   auto const &tabStops = !style.m_tabStops.empty() ? style.m_tabStops : defaultStyle.m_tabStops;
   if (!tabStops.empty())
   {

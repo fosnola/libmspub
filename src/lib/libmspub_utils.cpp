@@ -211,10 +211,7 @@ librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData deflated)
   return inflated;
 }
 
-namespace
-{
-
-static void _appendUCS4(librevenge::RVNGString &text, unsigned ucs4Character)
+void appendUCS4(librevenge::RVNGString &text, unsigned ucs4Character)
 {
   unsigned char first;
   int len;
@@ -261,8 +258,6 @@ static void _appendUCS4(librevenge::RVNGString &text, unsigned ucs4Character)
 
   text.append(outbuf);
 }
-
-} // anonymous namespace
 
 #define MSPUB_NUM_ELEMENTS(array) sizeof(array)/sizeof(array[0])
 
@@ -406,7 +401,7 @@ void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned c
       auto ucs4Character = (uint32_t)ucnv_getNextUChar(conv, &src, srcLimit, &status);
       if (U_SUCCESS(status))
       {
-        _appendUCS4(text, ucs4Character);
+        appendUCS4(text, ucs4Character);
       }
     }
   }

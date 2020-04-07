@@ -41,6 +41,7 @@ struct Line;
 struct Shadow;
 struct TableInfo;
 
+struct TextLineState;
 class MSPUBCollector
 {
   friend class Fill;
@@ -195,6 +196,9 @@ private:
   void writeImage(double x, double y, double height, double width,
                   ImgType type, const librevenge::RVNGBinaryData &blob,
                   boost::optional<Color> oneBitColor) const;
+  void openTextLine(TextLineState &state, librevenge::RVNGPropertyList const &lineProps, boost::optional<ListInfo> const &list) const;
+  void closeTextLine(TextLineState &state, bool lastLine) const;
+  void closeTextList(TextLineState &state) const;
   bool pageIsMaster(unsigned pageSeqNum) const;
   void addPageMasterName(unsigned pageNum, librevenge::RVNGPropertyList &propList, bool createIsNeeded) const;
 

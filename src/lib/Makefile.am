@@ -29,6 +29,7 @@ libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_SOURCES = \
 	FillType.h \
 	Line.h \
 	ListInfo.h \
+	ListInfo.cpp \
 	MSPUBBlockID.h \
 	MSPUBBlockType.h \
 	MSPUBCollector.cpp \

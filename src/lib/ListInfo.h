@@ -12,6 +12,8 @@
 
 #include <boost/optional.hpp>
 
+#include <librevenge/librevenge.h>
+
 #include "NumberingDelimiter.h"
 #include "NumberingType.h"
 
@@ -27,7 +29,7 @@ struct ListInfo
   ListType m_listType;
 
   //unordered list stuff
-  boost::optional<unsigned> m_bulletChar;
+  boost::optional<unsigned> m_bulletChar; // in unicode
   ListInfo(unsigned bulletChar) : m_listType(UNORDERED),
     m_bulletChar(bulletChar), m_numberIfRestarted(),
     m_numberingType(), m_numberingDelimiter()
@@ -45,6 +47,9 @@ struct ListInfo
       m_numberingDelimiter(numberingDelimiter)
   {
   }
+
+  void addTo(librevenge::RVNGPropertyList &level) const;
+  bool isCompatibleWith(ListInfo const &listInfo) const;
 };
 } // namespace libmspub
 

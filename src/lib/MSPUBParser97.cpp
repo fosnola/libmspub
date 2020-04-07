@@ -13,6 +13,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <utility>
 
 #include "MSPUBCollector.h"
 #include "MSPUBTypes.h"
@@ -300,7 +301,8 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
       posToStyle[positions[i]]=oIt->second;
       continue;
     }
-    input->seek(index*0x200+2*offs, librevenge::RVNG_SEEK_SET); // skip small size
+    long debPos=index*0x200+2*offs;
+    input->seek(debPos, librevenge::RVNG_SEEK_SET); // skip small size
     uint8_t len=readU8(input);
     uint8_t tabPos=readU8(input);
     if (tabPos<2 || 2*offs+1+tabPos>0x200 || 2*len+1<tabPos)
@@ -332,7 +334,16 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
         MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: unknown align=%d\n", align));
         break;
       }
-      // &20 tight/loose/...
+      int spacing=(align>>3)&0xf;
+      if (spacing>=1 && spacing<=4)
+      {
+        double values[]= {0, -1, -0.5, 1.5, 3};
+        style.m_letterSpacingInPt=values[spacing];
+      }
+      else if (spacing)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: unknown spacing=%d\n", spacing));
+      }
     }
     if (tabPos>=5)
       style.m_rightIndentEmu=readU16(input)*635;
@@ -358,9 +369,58 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
       style.m_spaceAfterEmu=readU8(input)*635;
       input->seek(1, librevenge::RVNG_SEEK_CUR);
     }
+    if (tabPos>=33)
+    {
+      input->seek(debPos+32, librevenge::RVNG_SEEK_SET);
+      auto numberId=readU8(input);
+      if (numberId>=1 && numberId<=3)
+      {
+        NumberingType const(types[])= { STANDARD_WESTERN, LOWERCASE_LETTERS, UPPERCASE_LETTERS};
+        input->seek(1, librevenge::RVNG_SEEK_CUR); // 0|1
+        boost::optional<unsigned> numberIfRestarted;
+        if (tabPos>=34) numberIfRestarted=tabPos>=35 ? readU16(input) : readU8(input);
+
+        // CHANGE: converting delimiters string in enum then back in string is not optimal...
+        char delimiters[]= {0,0};
+        if (tabPos>=36) delimiters[0]=char(readU8(input));
+        if (tabPos>=37) delimiters[1]=char(readU8(input));
+        static std::map<std::pair<char,char>,NumberingDelimiter> const delimiterMaps=
+        {
+          { {0,0}, NO_DELIMITER},
+          { {0,')'}, PARENTHESIS},
+          { {'(',')'}, PARENTHESES_SURROUND},
+          { {0,'.'}, PERIOD},
+          { {0,']'}, SQUARE_BRACKET},
+          { {0,':'}, COLON},
+          { {'[',']'}, SQUARE_BRACKET_SURROUND},
+          { {'-','-'}, HYPHEN_SURROUND},
+        };
+        auto delIt=delimiterMaps.find({delimiters[0],delimiters[1]});
+        if (delIt==delimiterMaps.end())
+        {
+          MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: unknown delimiters=%x:%x", unsigned(delimiters[0],delimiters[1])));
+        }
+        style.m_listInfo=ListInfo(numberIfRestarted, types[numberId-1], delIt==delimiterMaps.end() ? NO_DELIMITER : delIt->second);
+      }
+      else if (numberId>3)
+      {
+        style.m_listInfo=ListInfo(0x2022);
+      }
+    }
+    if (m_version>=3 && tabPos>=39)
+    {
+      input->seek(debPos+38, librevenge::RVNG_SEEK_SET);
+      unsigned fancy=readU16(input);
+      if (fancy)
+      {
+        style.m_dropCapLines=2;
+        style.m_dropCapLetters=1;
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: find fancy character=%x, ignored\n", fancy));
+      }
+    }
     if (1+tabPos+3<2*len+1)
     {
-      input->seek(index*0x200+2*offs+1+tabPos, librevenge::RVNG_SEEK_SET);
+      input->seek(debPos+1+tabPos, librevenge::RVNG_SEEK_SET);
       auto tabLen=readU8(input);
       if (tabLen<2 || 2*offs+1+tabPos+1+tabLen>0x200 || 2*len+1<tabPos+1+tabLen)
       {

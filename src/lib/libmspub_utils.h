@@ -76,6 +76,7 @@ void readNBytes(librevenge::RVNGInputStream *input, unsigned long length, std::v
 
 unsigned long getLength(librevenge::RVNGInputStream *input);
 
+void appendUCS4(librevenge::RVNGString &text, unsigned ucs4Character);
 void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned char> &characters, const char *encoding);
 
 bool stillReading(librevenge::RVNGInputStream *input, unsigned long until);

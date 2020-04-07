@@ -1373,7 +1373,8 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
   {
     if (bulletChar)
     {
-      ret.m_listInfo = ListInfo(bulletChar);
+      // CHANGE: convert bulletChar in unicode
+      ret.m_listInfo = ListInfo(0x2022);
     }
     else
     {
