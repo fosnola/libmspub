@@ -304,7 +304,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       CharacterStyle charStyle;
       ParagraphStyle paraStyle;
       // sometimes the paragraph is defined in pos-1, so let check
-      auto pIt=posToParaMap.lower_bound(input->tell());
+      auto pIt=posToParaMap.lower_bound(unsigned(input->tell()));
       if (pIt!=posToParaMap.begin())
       {
         --pIt;
@@ -313,7 +313,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       unsigned oldParaPos=0; // used to check for empty line
       for (unsigned p=textLimits[i]; p<textLimits[i+1]; ++p)
       {
-        auto actPos=input->tell();
+        unsigned actPos=unsigned(input->tell());
         auto cIt=posToSpanMap.find(actPos);
         if (cIt!=posToSpanMap.end())
         {
@@ -550,7 +550,7 @@ bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
         }
       }
     }
-    unsigned newId=styles.size();
+    unsigned newId=unsigned(styles.size());
     posToStyle[positions[i]]=newId;
     offsetToStyleMap[offs]=newId;
     styles.push_back(style);
@@ -645,7 +645,7 @@ bool MSPUBParser91::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned
     }
     style.textSizeInPt = 10 +
                          static_cast<double>(textSizeVariationFromDefault) / 2;
-    unsigned newId=styles.size();
+    unsigned newId=unsigned(styles.size());
     posToStyle[positions[i]]=newId;
     offsetToStyleMap[offs]=newId;
     styles.push_back(style);
@@ -801,7 +801,7 @@ bool MSPUBParser91::parseShape(librevenge::RVNGInputStream *input, BlockInfo91 c
   }
   if (width>0)
   {
-    m_collector->addShapeLine(info.m_id, Line(getColor(colors[2]), width*12700, true));
+    m_collector->addShapeLine(info.m_id, Line(getColor(colors[2]), unsigned(width*12700), true));
     if (borderId>=0 && (flags&4))
     {
       m_collector->setShapeBorderImageId(info.m_id, unsigned(borderId));
@@ -879,7 +879,7 @@ bool MSPUBParser91::parseImage(librevenge::RVNGInputStream *input, BlockInfo91 c
   else if (header[0]==0x501 && header[1]==0)
   {
     input->seek(info.m_offset, librevenge::RVNG_SEEK_SET);
-    if (parseOLEPicture(input, len, imgType, img))
+    if (parseOLEPicture(input, unsigned(len), imgType, img))
     {
       m_collector->addImage(info.m_id, imgType, img);
       return true;
@@ -987,7 +987,7 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       auto oIt=offsetToImage.find(decal[off]);
       if (oIt!=offsetToImage.end())
       {
-        m_collector->setBorderImageOffset(i,oIt->second);
+        m_collector->setBorderImageOffset(unsigned(i),oIt->second);
         continue;
       }
       input->seek(header.m_positions[i]+decal[off], librevenge::RVNG_SEEK_SET);
@@ -1009,11 +1009,11 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       // ok, let save the picure
       pictSize*=2;
       input->seek(header.m_positions[i]+decal[off], librevenge::RVNG_SEEK_SET);
-      librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, i));
+      librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, unsigned(i)));
       readData(input, pictSize, img);
-      unsigned newId=offsetToImage.size();
-      m_collector->setBorderImageOffset(i,newId);
-      if (off==0) m_collector->setShapeStretchBorderArt(i);
+      unsigned newId=unsigned(offsetToImage.size());
+      m_collector->setBorderImageOffset(unsigned(i),newId);
+      if (off==0) m_collector->setShapeStretchBorderArt(unsigned(i));
       offsetToImage[decal[off]]=newId;
     }
   }
@@ -1071,7 +1071,7 @@ bool MSPUBParser91::parsePageIds(librevenge::RVNGInputStream *input)
 
 bool MSPUBParser91::parseZoneHeader(librevenge::RVNGInputStream *input, ZoneHeader91 &header, bool doNotReadPositions)
 {
-  unsigned pos=input->tell();
+  unsigned pos=unsigned(input->tell());
   header.m_N=int(readU16(input));
   header.m_maxN=int(readU16(input));
   header.m_lastValue=int(readU16(input));
@@ -1095,7 +1095,7 @@ bool MSPUBParser91::parseZoneHeader(librevenge::RVNGInputStream *input, ZoneHead
 
 bool MSPUBParser91::parseTextPLCHeader(librevenge::RVNGInputStream *input, TextPLCHeader91 &header)
 {
-  unsigned pos=input->tell();
+  unsigned pos=unsigned(input->tell());
   header.m_N=int(readU16(input));
   header.m_maxN=int(readU16(input));
   header.m_dataSize=int(readU16(input));

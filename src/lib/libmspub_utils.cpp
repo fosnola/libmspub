@@ -76,6 +76,7 @@ const char *mimeByImgType(ImgType type)
   {
   case PNG:
     return "image/png";
+  case JPEGCMYK: // checkme
   case JPEG:
     return "image/jpeg";
   case DIB:
@@ -88,6 +89,7 @@ const char *mimeByImgType(ImgType type)
     return "image/emf";
   case TIFF:
     return "image/tiff";
+  case UNKNOWN:
   default:
     MSPUB_DEBUG_MSG(("Unknown image type %d passed to mimeByImgType!\n", type));
     return nullptr;
@@ -126,7 +128,7 @@ double doubleModulo(double x, double y)
 double toFixedPoint(int fp)
 {
   unsigned short fractionalPart = ((unsigned short) fp) & 0xFFFF;
-  short integralPart = fp >> 16;
+  short integralPart = short(fp >> 16);
   return integralPart + fractionalPart / 65536.;
 }
 
@@ -182,11 +184,11 @@ librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData deflated)
     return librevenge::RVNGBinaryData();
   }
   int have;
-  unsigned left = deflated.size();
+  unsigned left = unsigned(deflated.size());
   do
   {
     strm.avail_in = ZLIB_CHUNK > left ? left : ZLIB_CHUNK;
-    strm.next_in = (unsigned char *)data;
+    strm.next_in = const_cast<unsigned char *>(data);
     do
     {
       strm.avail_out = ZLIB_CHUNK;

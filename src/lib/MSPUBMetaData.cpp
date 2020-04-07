@@ -146,7 +146,7 @@ uint32_t libmspub::MSPUBMetaData::getCodePage()
     {
       if (i >= m_typedPropertyValues.size())
         break;
-      return m_typedPropertyValues[i];
+      return m_typedPropertyValues[uint16_t(i)];
     }
   }
 
@@ -176,7 +176,7 @@ void libmspub::MSPUBMetaData::readTypedPropertyValue(librevenge::RVNGInputStream
   if (type == VT_I2)
   {
     uint16_t value = readU16(input);
-    m_typedPropertyValues[index] = value;
+    m_typedPropertyValues[uint16_t(index)] = value;
   }
   else if (type == VT_LPSTR)
   {
@@ -207,11 +207,15 @@ void libmspub::MSPUBMetaData::readTypedPropertyValue(librevenge::RVNGInputStream
           m_metaData.insert("dc:description", string);
           break;
         case PIDSI::PIDSI_TEMPLATE:
+        {
           std::string templateHref(string.cstr());
           size_t found = templateHref.find_last_of("/\\");
           if (found != std::string::npos)
             string = librevenge::RVNGString(templateHref.substr(found+1).c_str());
           m_metaData.insert("librevenge:template", string);
+          break;
+        }
+        default:
           break;
         }
       }
@@ -229,6 +233,8 @@ void libmspub::MSPUBMetaData::readTypedPropertyValue(librevenge::RVNGInputStream
           break;
         case PIDDSI_LANGUAGE:
           m_metaData.insert("dc:language", string);
+          break;
+        default:
           break;
         }
       }
@@ -291,7 +297,7 @@ bool libmspub::MSPUBMetaData::parseTimes(librevenge::RVNGInputStream *input)
   uint32_t firstDirSectorLocation = readU32(input);
 
   // Seek to the Root Directory Entry
-  size_t sectorSize = std::pow(2, sectorShift);
+  size_t sectorSize = size_t(std::pow(2, sectorShift));
   input->seek((firstDirSectorLocation + 1) * sectorSize, librevenge::RVNG_SEEK_SET);
   // DirectoryEntryName: 64 bytes
   // DirectoryEntryNameLength: 2 bytes

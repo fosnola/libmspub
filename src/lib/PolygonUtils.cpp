@@ -5818,6 +5818,9 @@ const CustomShape *getCustomShape(ShapeType type)
     return &CS_MOON_2;
   case BLOCK_ARC_2:
     return &CS_BLOCK_ARC_2;
+  case CUSTOM:
+  case NOT_PRIMITIVE:
+  case UNKNOWN_SHAPE:
   default:
     return nullptr;
   }
@@ -5918,7 +5921,7 @@ ShapeElementCommand getCommandFromBinary(unsigned short binary)
     count = 1;
     break;
   }
-  return ShapeElementCommand(cmd, count);
+  return ShapeElementCommand(cmd, (unsigned char) count);
 }
 
 double getSpecialIfNecessary(std::function<double(unsigned index)> calculator, int val)
@@ -5989,6 +5992,8 @@ void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeT
       case 3:
         old.m_x += lineWidth / 2;
         break;
+      default:
+        break;
       }
       old = transform.transformWithOrigin(old, center);
       vertexStart.insert("svg:x", old.m_x);
@@ -6014,6 +6019,8 @@ void drawEmulatedLine(std::shared_ptr<const CustomShape> shape, ShapeType shapeT
         break;
       case 4:
         vector.m_x += lineWidth / 2;
+        break;
+      default:
         break;
       }
     }
@@ -6073,7 +6080,7 @@ void getRayEllipseIntersection(double initX, double initY, double rx, double ry,
 {
   double x = initX - cx;
   double y = initY - cy;
-  if (x != 0 && y != 0)
+  if ((x < 0 || x > 0) && (y < 0 || y > 0))
   {
     xOut = rx * ry / sqrt(ry * ry + rx * rx * (y / x) * (y / x));
     if (x < 0)
@@ -6082,7 +6089,7 @@ void getRayEllipseIntersection(double initX, double initY, double rx, double ry,
     }
     yOut = xOut * y / x;
   }
-  else if (y != 0)
+  else if (y < 0 || y > 0)
   {
     xOut = 0;
     if (y > 0)
@@ -6094,7 +6101,7 @@ void getRayEllipseIntersection(double initX, double initY, double rx, double ry,
       yOut = -ry;
     }
   }
-  else if (x != 0)
+  else if (x < 0 || x > 0)
   {
     yOut = 0;
     if (x > 0)
@@ -6147,8 +6154,8 @@ void writeCustomShape(ShapeType shapeType, librevenge::RVNGPropertyList &graphic
     return;
   }
   bool drawStroke = !lines.empty();
-  bool horizontal = height == 0;
-  bool vertical = width == 0;
+  bool horizontal = height <= 0 && height >= 0;
+  bool vertical = width <= 0 && width >= 0;
   if (horizontal && vertical)
   {
     return;
@@ -6355,6 +6362,16 @@ void writeCustomShape(ShapeType shapeType, librevenge::RVNGPropertyList &graphic
         case ARC:
           MSPUB_DEBUG_MSG(("ARC %d\n", cmd.m_count));
           break;
+        case MOVETO:
+        case LINETO:
+        case CURVETO:
+        case NOFILL:
+        case NOSTROKE:
+        case ANGLEELLIPSE:
+        case CLOSESUBPATH:
+        case ENDSUBPATH:
+        case ELLIPTICALQUADRANTX:
+        case ELLIPTICALQUADRANTY:
         default:
           break;
         }
@@ -6616,19 +6633,19 @@ std::shared_ptr<const CustomShape> getFromDynamicCustomShape(const DynamicCustom
 {
   return std::shared_ptr<const CustomShape>(new CustomShape(
                                               dcs.m_vertices.empty() ? nullptr : dcs.m_vertices.data(),
-                                              dcs.m_vertices.size(),
+                                              (unsigned)dcs.m_vertices.size(),
                                               dcs.m_elements.empty() ? nullptr : dcs.m_elements.data(),
-                                              dcs.m_elements.size(),
+                                              (unsigned)dcs.m_elements.size(),
                                               dcs.m_calculations.empty() ? nullptr : dcs.m_calculations.data(),
-                                              dcs.m_calculations.size(),
+                                              (unsigned)dcs.m_calculations.size(),
                                               dcs.m_defaultAdjustValues.empty() ? nullptr :
                                               dcs.m_defaultAdjustValues.data(),
-                                              dcs.m_defaultAdjustValues.size(),
+                                              (unsigned)dcs.m_defaultAdjustValues.size(),
                                               dcs.m_textRectangles.empty() ? nullptr : dcs.m_textRectangles.data(),
-                                              dcs.m_textRectangles.size(),
+                                              (unsigned)dcs.m_textRectangles.size(),
                                               dcs.m_coordWidth, dcs.m_coordHeight,
                                               dcs.m_gluePoints.empty() ? nullptr : dcs.m_gluePoints.data(),
-                                              dcs.m_gluePoints.size(),
+                                              (unsigned)dcs.m_gluePoints.size(),
                                               dcs.m_adjustShiftMask
                                             ));
 }

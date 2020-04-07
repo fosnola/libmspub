@@ -11,8 +11,9 @@
 #define MSPUB_OLE_PARSER_H
 
 #include <functional>
-#include <string>
 #include <map>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include <librevenge-stream/librevenge-stream.h>
@@ -79,8 +80,6 @@ protected:
     ie. it converts "MatOST/MatadorObject1", "Object 1" in 1 */
   static int getIdFromDirectory(std::string const &dirName);
 
-  //! if filled, does not parse content with this name
-  std::string m_avoidOLE;
   //! the main state
   std::shared_ptr<OLEParserInternal::State> m_state;
 };

@@ -152,6 +152,7 @@ PUBAPI bool MSPUBDocument::parse(librevenge::RVNGInputStream *input, librevenge:
       parser.reset(new MSPUBParser(input, &collector));
       break;
     }
+    case MSPUB_UNKNOWN_VERSION:
     default:
       return false;
     }

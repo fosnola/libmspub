@@ -27,7 +27,7 @@ bool operator!=(const Dot &lhs, const Dot &rhs)
 
 bool operator==(const Dash &lhs, const Dash &rhs)
 {
-  if (!(lhs.m_distance == rhs.m_distance &&
+  if (!(lhs.m_distance <= rhs.m_distance && lhs.m_distance >= rhs.m_distance &&
         lhs.m_dotStyle == rhs.m_dotStyle && lhs.m_dots.size() == rhs.m_dots.size()))
   {
     return false;

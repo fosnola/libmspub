@@ -140,8 +140,8 @@ void GradientFill::addColorReverse(ColorReference c, unsigned offsetPercent, dou
 
 void GradientFill::completeComplexFill()
 {
-  unsigned stops = m_stops.size();
-  for (unsigned i = stops; i > 0; i--)
+  size_t stops = m_stops.size();
+  for (auto i = stops; i > 0; i--)
   {
     if (m_stops[i-1].m_offsetPercent != 50)
       m_stops.push_back(StopInfo(m_stops[i-1].m_colorReference, 50 - m_stops[i-1].m_offsetPercent + 50, m_stops[i-1].m_opacity));

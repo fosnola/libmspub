@@ -77,6 +77,7 @@ struct ListHeader2k
 MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector *collector)
   : MSPUBParser(input, collector)
   , m_imageDataChunkIndices()
+  , m_oleDataChunkIndices()
   , m_quillColorEntries()
   , m_chunkChildIndicesById()
   , m_chunksBeingRead()
@@ -93,9 +94,9 @@ unsigned MSPUBParser2k::getColorIndexByQuillEntry(unsigned entry)
   {
     m_quillColorEntries.push_back(translation);
     m_collector->addTextColor(ColorReference(translation));
-    return m_quillColorEntries.size() - 1;
+    return unsigned(m_quillColorEntries.size() - 1);
   }
-  return i_entry - m_quillColorEntries.begin();
+  return unsigned(i_entry - m_quillColorEntries.begin());
 }
 
 MSPUBParser2k::~MSPUBParser2k()
@@ -111,11 +112,11 @@ unsigned short translateLineWidth(unsigned char lineWidth)
   }
   else if (lineWidth > 0x81)
   {
-    return ((lineWidth - 0x81) / 3) * 4 + ((lineWidth - 0x81) % 3) + 1;
+    return (unsigned short)(((lineWidth - 0x81) / 3) * 4 + ((lineWidth - 0x81) % 3) + 1);
   }
   else
   {
-    return lineWidth * 4;
+    return (unsigned short)(lineWidth * 4);
   }
 }
 
@@ -377,7 +378,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     unsigned short parent = readU16(input);
     auto chunkOffset = readU32(input);
     offsetsSet.insert(chunkOffset);
-    unsigned offset = input->tell();
+    unsigned offset = unsigned(input->tell());
     input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
     unsigned short typeMarker = readU16(input);
     input->seek(offset, librevenge::RVNG_SEEK_SET);
@@ -467,7 +468,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   if (zIt!=zonesLimit.end()) offsetsSet.insert(*zIt);
   for (auto &chunk : m_contentChunks)
   {
-    auto oIt=offsetsSet.find(chunk.offset);
+    auto oIt=offsetsSet.find(unsigned(chunk.offset));
     if (oIt!=offsetsSet.end()) ++oIt;
     if (oIt!=offsetsSet.end())
       chunk.end=*oIt;
@@ -684,7 +685,7 @@ bool MSPUBParser2k::parseBorderArts(librevenge::RVNGInputStream *input)
       continue;
     }
     input->seek(listHeader.m_positions[p], librevenge::RVNG_SEEK_SET);
-    parseBorderArt(input, p, *it);
+    parseBorderArt(input, unsigned(p), *it);
   }
   return true;
 }
@@ -730,7 +731,7 @@ bool MSPUBParser2k::parseBorderArt(librevenge::RVNGInputStream *input, unsigned 
     input->seek(begPos+decal[off], librevenge::RVNG_SEEK_SET);
     librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, borderNum));
     readData(input, pictSize, img);
-    unsigned newId=offsetToImage.size();
+    unsigned newId=unsigned(offsetToImage.size());
     m_collector->setBorderImageOffset(borderNum,newId);
     if (off==0) m_collector->setShapeStretchBorderArt(borderNum);
     offsetToImage[decal[off]]=newId;
@@ -740,7 +741,7 @@ bool MSPUBParser2k::parseBorderArt(librevenge::RVNGInputStream *input, unsigned 
 
 bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition)
 {
-  unsigned start=input->tell();
+  unsigned start=(unsigned)input->tell();
   if (start+10>endPos)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: the zone seems too short\n"));
@@ -772,9 +773,9 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
 {
   auto const &chunkOffset=chunk.offset;
   input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
-  header.m_beginOffset=chunk.offset;
+  header.m_beginOffset=unsigned(chunk.offset);
   header.m_fileType=readU16(input);
-  header.m_endOffset=chunk.end;
+  header.m_endOffset=unsigned(chunk.end);
   switch (header.m_fileType)
   {
   case 0: // old text in Contents
@@ -822,7 +823,7 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
     break;
   }
   input->seek(chunkOffset+3, librevenge::RVNG_SEEK_SET);
-  header.m_dataOffset=chunkOffset+readU8(input);
+  header.m_dataOffset=unsigned(chunkOffset+readU8(input));
 }
 
 bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
@@ -999,7 +1000,7 @@ void MSPUBParser2k::parseShapeLine(librevenge::RVNGInputStream *input, bool isRe
                                    unsigned seqNum)
 {
   input->seek(offset + getFirstLineOffset(), librevenge::RVNG_SEEK_SET);
-  unsigned short leftLineWidth = readU8(input);
+  unsigned char leftLineWidth = readU8(input);
   bool leftLineExists = leftLineWidth != 0;
   unsigned leftColorReference = readU32(input);
   unsigned translatedLeftColorReference = translate2kColorReference(leftColorReference);

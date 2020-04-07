@@ -170,6 +170,8 @@ short MSPUBParser::getBlockDataLength(unsigned type) // -1 for variable-length b
   case 0x98:
   case 0xa0:
     return -1;
+  default:
+    break;
   }
   //FIXME: Debug assertion here? Should never get here.
   MSPUB_DEBUG_MSG(("Block of unknown type seen!\n"));
@@ -245,15 +247,16 @@ ImgType MSPUBParser::imgTypeByBlipType(unsigned short type)
     return TIFF;
   case OFFICE_ART_BLIP_PICT:
     return PICT;
+  default:
+    return UNKNOWN;
   }
-  return UNKNOWN;
 }
 
 int MSPUBParser::getStartOffset(ImgType type, unsigned short initial)
 {
   bool oneUid = true;
   int offset = 0x11;
-  unsigned short recInstance = initial >> 4;
+  unsigned short recInstance = (unsigned short)(initial >> 4);
   switch (type)
   {
   case WMF:
@@ -284,6 +287,8 @@ int MSPUBParser::getStartOffset(ImgType type, unsigned short initial)
     oneUid = recInstance == 0x6E4;
     offset = 0x11;
     break;
+  case PICT:
+  case UNKNOWN:
   default:
     break;
   }
@@ -549,7 +554,7 @@ bool MSPUBParser::parseFontChunk(
             else if (subSubInfo.id == EMBEDDED_EOT)
             {
               eotOffset = subSubInfo.dataOffset;
-              eotLength = subSubInfo.dataLength;
+              eotLength = unsigned(subSubInfo.dataLength);
             }
           }
           if (bool(name) && bool(eotOffset))
@@ -1182,7 +1187,7 @@ void MSPUBParser::parseColors(librevenge::RVNGInputStream *input, const QuillChu
   input->seek(input->tell() + 8, librevenge::RVNG_SEEK_SET);
   for (unsigned i = 0; i < numEntries; ++i)
   {
-    unsigned blocksOffset = input->tell();
+    unsigned blocksOffset = (unsigned) input->tell();
     unsigned len = readU32(input);
     while (stillReading(input, blocksOffset + len))
     {
@@ -1213,11 +1218,11 @@ std::vector<MSPUBParser::TextParagraphReference> MSPUBParser::parseParagraphStyl
     chunkOffsets.push_back(readU16(input));
   }
   unsigned currentSpanBegin = 0;
-  for (unsigned short i = 0; i < numEntries; ++i)
+  for (size_t i = 0; i < numEntries; ++i)
   {
     input->seek(chunk.offset + chunkOffsets[i], librevenge::RVNG_SEEK_SET);
     ParagraphStyle style = getParagraphStyle(input);
-    ret.push_back(TextParagraphReference(currentSpanBegin, textOffsets[i], style));
+    ret.push_back(TextParagraphReference((unsigned short)currentSpanBegin, (unsigned short)textOffsets[i], style));
     currentSpanBegin = textOffsets[i] + 1;
   }
   return ret;
@@ -1241,12 +1246,12 @@ std::vector<MSPUBParser::TextSpanReference> MSPUBParser::parseCharacterStyles(li
     chunkOffsets.push_back(readU16(input));
   }
   unsigned currentSpanBegin = 0;
-  for (unsigned short i = 0; i < numEntries; ++i)
+  for (size_t i = 0; i < numEntries; ++i)
   {
     input->seek(chunk.offset + chunkOffsets[i], librevenge::RVNG_SEEK_SET);
     CharacterStyle style = getCharacterStyle(input);
     currentSpanBegin = textOffsets[i] + 1;
-    ret.push_back(TextSpanReference(currentSpanBegin, textOffsets[i], style));
+    ret.push_back(TextSpanReference((unsigned short)currentSpanBegin, (unsigned short)textOffsets[i], style));
   }
   return ret;
 }
@@ -1260,7 +1265,7 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
   NumberingDelimiter numberingDelimiter = NO_DELIMITER;
   boost::optional<unsigned> numberIfRestarted;
 
-  unsigned offset = input->tell();
+  unsigned offset = unsigned(input->tell());
   unsigned len = readU32(input);
   while (stillReading(input, offset + len))
   {
@@ -1387,7 +1392,7 @@ CharacterStyle MSPUBParser::getCharacterStyle(librevenge::RVNGInputStream *input
   bool seenBold1 = false, seenBold2 = false, seenItalic1 = false, seenItalic2 = false;
   int textSize1 = -1, /* textSize2 = -1,*/ colorIndex = -1;
   boost::optional<unsigned> fontIndex;
-  unsigned offset = input->tell();
+  unsigned offset = unsigned(input->tell());
   unsigned len = readU32(input);
   while (stillReading(input, offset + len))
   {
@@ -1531,7 +1536,7 @@ bool MSPUBParser::parseEscher(librevenge::RVNGInputStream *input)
       unsigned short currentDelayIndex = 1;
       while (stillReading(input, bsc.contentsOffset + bsc.contentsLength))
       {
-        unsigned begin = input->tell();
+        unsigned begin = unsigned(input->tell());
         input->seek(begin + 10, librevenge::RVNG_SEEK_SET);
         if (!(readU32(input) == 0 && readU32(input) == 0 && readU32(input) == 0 && readU32(input) == 0))
         {
@@ -1576,6 +1581,8 @@ void MSPUBParser::parseShapeGroup(librevenge::RVNGInputStream *input, const Esch
       break;
     case OFFICE_ART_SP_CONTAINER:
       parseEscherShape(input, shapeOrGroup, parentCoordinateSystem, parentGroupAbsoluteCoord);
+      break;
+    default:
       break;
     }
     input->seek(shapeOrGroup.contentsOffset + shapeOrGroup.contentsLength + getEscherElementTailLength(shapeOrGroup.type), librevenge::RVNG_SEEK_SET);
@@ -1935,29 +1942,29 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
           else if (cAnchor.type == OFFICE_ART_CHILD_ANCHOR)
           {
             input->seek(cAnchor.contentsOffset, librevenge::RVNG_SEEK_SET);
-            int coordSystemWidth = int64_t(thisParentCoordinateSystem.m_xe) - thisParentCoordinateSystem.m_xs;
+            int coordSystemWidth = int(int64_t(thisParentCoordinateSystem.m_xe) - thisParentCoordinateSystem.m_xs);
             if (coordSystemWidth == 0)
               coordSystemWidth = 1;
             int coordSystemHeight = thisParentCoordinateSystem.m_ye - thisParentCoordinateSystem.m_ys;
             if (coordSystemHeight == 0)
               coordSystemHeight = 1;
-            int groupWidth = int64_t(parentGroupAbsoluteCoord.m_xe) - parentGroupAbsoluteCoord.m_xs;
-            int groupHeight = int64_t(parentGroupAbsoluteCoord.m_ye) - parentGroupAbsoluteCoord.m_ys;
+            int groupWidth = int(int64_t(parentGroupAbsoluteCoord.m_xe) - parentGroupAbsoluteCoord.m_xs);
+            int groupHeight = int(int64_t(parentGroupAbsoluteCoord.m_ye) - parentGroupAbsoluteCoord.m_ys);
             double widthScale = (double)groupWidth / coordSystemWidth;
             double heightScale = (double)groupHeight / coordSystemHeight;
-            int xs = (readU32(input) - thisParentCoordinateSystem.m_xs) * widthScale + parentGroupAbsoluteCoord.m_xs;
-            int ys = (readU32(input) - thisParentCoordinateSystem.m_ys) * heightScale + parentGroupAbsoluteCoord.m_ys;
-            int xe = (readU32(input) - thisParentCoordinateSystem.m_xs) * widthScale + parentGroupAbsoluteCoord.m_xs;
-            int ye = (readU32(input) - thisParentCoordinateSystem.m_ys) * heightScale + parentGroupAbsoluteCoord.m_ys;
+            int xs = int((readU32(input) - thisParentCoordinateSystem.m_xs) * widthScale + parentGroupAbsoluteCoord.m_xs);
+            int ys = int((readU32(input) - thisParentCoordinateSystem.m_ys) * heightScale + parentGroupAbsoluteCoord.m_ys);
+            int xe = int((readU32(input) - thisParentCoordinateSystem.m_xs) * widthScale + parentGroupAbsoluteCoord.m_xs);
+            int ye = int((readU32(input) - thisParentCoordinateSystem.m_ys) * heightScale + parentGroupAbsoluteCoord.m_ys);
 
             absolute = Coordinate(xs, ys, xe, ye);
           }
           if (rotated90)
           {
-            int initialWidth = int64_t(absolute.m_xe) - absolute.m_xs;
-            int initialHeight = int64_t(absolute.m_ye) - absolute.m_ys;
-            int centerX = int64_t(absolute.m_xs) + initialWidth / 2;
-            int centerY = int64_t(absolute.m_ys) + initialHeight / 2;
+            int initialWidth = int(int64_t(absolute.m_xe) - absolute.m_xs);
+            int initialHeight = int(int64_t(absolute.m_ye) - absolute.m_ys);
+            int centerX = int(int64_t(absolute.m_xs) + initialWidth / 2);
+            int centerY = int(int64_t(absolute.m_ys) + initialHeight / 2);
             int xs = centerX - initialHeight / 2;
             int ys = centerY - initialWidth / 2;
             int xe = xs + initialHeight;
@@ -1982,7 +1989,7 @@ void MSPUBParser::parseEscherShape(librevenge::RVNGInputStream *input, const Esc
 std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, unsigned> &foptProperties,
                                               bool &skipIfNotBg, std::map<unsigned short, std::vector<unsigned char> > &foptValues)
 {
-  const FillType *ptr_fillType = (FillType *)getIfExists_const(foptProperties, FIELDID_FILL_TYPE);
+  FillType const *ptr_fillType = (FillType const *) getIfExists_const(foptProperties, FIELDID_FILL_TYPE);
   FillType fillType = ptr_fillType ? *ptr_fillType : SOLID;
   switch (fillType)
   {
@@ -2014,7 +2021,7 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
     const unsigned *ptr_fillOpacity = getIfExists_const(foptProperties, FIELDID_FILL_OPACITY);
     const unsigned *ptr_fillBackOpacity = getIfExists_const(foptProperties, FIELDID_FILL_BACK_OPACITY);
     const unsigned *ptr_fillFocus = getIfExists_const(foptProperties, FIELDID_FILL_FOCUS);
-    short fillFocus = ptr_fillFocus ? int((*ptr_fillFocus << 16) >> 16) : 0;
+    short fillFocus = ptr_fillFocus ? short((*ptr_fillFocus << 16) >> 16) : 0;
     angle = ptr_angle ? *ptr_angle : 0;
     angle >>= 16; //it's actually only 16 bits
     // Don't try to figure out what sense the following switch statement makes.
@@ -2057,7 +2064,7 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
       const std::vector<unsigned char> gradientData = foptValues[FIELDID_FILL_SHADE_COMPLEX];
       if (gradientData.size() > 6)
       {
-        unsigned short numEntries = gradientData[0] | (gradientData[1] << 8);
+        unsigned short numEntries = (unsigned short)(gradientData[0] | (gradientData[1] << 8));
         unsigned offs = 6;
         for (unsigned i = 0; i < numEntries; ++i)
         {
@@ -2144,6 +2151,7 @@ std::shared_ptr<Fill> MSPUBParser::getNewFill(const std::map<unsigned short, uns
     return std::shared_ptr<Fill>();
   }
   case BACKGROUND:
+  case SHADE_TITLE:
   default:
     return std::shared_ptr<Fill>();
   }
@@ -2170,7 +2178,7 @@ std::vector<unsigned short> MSPUBParser::parseSegments(
     return ret;
   }
   // assume that the entry size is 2.
-  unsigned short numEntries = segmentData[0] | (segmentData[1] << 8);
+  unsigned short numEntries = (unsigned short)(segmentData[0] | (segmentData[1] << 8));
   unsigned offset = 6;
   for (unsigned i = 0; i < numEntries; ++i)
   {
@@ -2178,7 +2186,7 @@ std::vector<unsigned short> MSPUBParser::parseSegments(
     {
       break;
     }
-    ret.push_back(segmentData[offset] | (segmentData[offset + 1] << 8));
+    ret.push_back((unsigned short)(segmentData[offset] | (segmentData[offset + 1] << 8)));
     offset += 2;
   }
   return ret;
@@ -2202,8 +2210,8 @@ std::vector<Vertex> MSPUBParser::parseVertices(
   {
     return ret;
   }
-  unsigned short numVertices = vertexData[0] | (vertexData[1] << 8);
-  unsigned short entrySize = vertexData[4] | (vertexData[5] << 8);
+  unsigned short numVertices = (unsigned short)(vertexData[0] | (vertexData[1] << 8));
+  unsigned short entrySize = (unsigned short)(vertexData[4] | (vertexData[5] << 8));
   if (entrySize == 0xFFF0)
   {
     entrySize = 4;
@@ -2269,8 +2277,9 @@ unsigned MSPUBParser::getEscherElementAdditionalHeaderLength(unsigned short type
   case OFFICE_ART_CLIENT_ANCHOR:
   case OFFICE_ART_CLIENT_DATA: //account for the fact that the length appears twice, for whatever reason
     return 4;
+  default:
+    return 0;
   }
-  return 0;
 }
 
 bool MSPUBParser::findEscherContainerWithTypeInSet(librevenge::RVNGInputStream *input, const EscherContainerInfo &parent, EscherContainerInfo &out, std::set<unsigned short> types)
@@ -2308,7 +2317,7 @@ FOPTValues MSPUBParser::extractFOPTValues(librevenge::RVNGInputStream *input, co
 {
   FOPTValues ret;
   input->seek(record.contentsOffset, librevenge::RVNG_SEEK_SET);
-  unsigned short numValues = record.initial >> 4;
+  unsigned short numValues = (unsigned short)(record.initial >> 4);
   std::vector<unsigned short> complexIds;
   for (unsigned short i = 0; i < numValues; ++i)
   {

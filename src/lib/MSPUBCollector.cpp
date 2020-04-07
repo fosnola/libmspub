@@ -288,43 +288,25 @@ void fillUnderline(librevenge::RVNGPropertyList &props, const Underline underlin
   case Underline::ThickLongDash:
     props.insert("style:text-underline-style", "long-dash");
     break;
+  default:
+    break;
   }
 
-  switch (underline)
-  {
-  case Underline::Double:
-  case Underline::DoubleWave:
+  if (underline==Underline::Double || underline==Underline::DoubleWave)
     props.insert("style:text-underline-type", "double");
-    break;
-  default:
+  else
     props.insert("style:text-underline-type", "single");
-    break;
-  }
 
-  switch (underline)
-  {
-  case Underline::Thick:
-  case Underline::ThickWave:
-  case Underline::ThickDot:
-  case Underline::ThickDash:
-  case Underline::ThickDotDash:
-  case Underline::ThickDotDotDash:
+  if (underline==Underline::Thick || underline==Underline::ThickWave || underline==Underline::ThickDot ||
+      underline==Underline::ThickDash || underline==Underline::ThickDotDash || underline==Underline::ThickDotDotDash)
     props.insert("style:text-underline-width", "bold");
-    break;
-  default:
+  else
     props.insert("style:text-underline-width", "auto");
-    break;
-  }
 
-  switch (underline)
-  {
-  case Underline::WordsOnly:
+  if (underline==Underline::WordsOnly)
     props.insert("style:text-underline-mode", "skip-white-space");
-    break;
-  default:
+  else
     props.insert("style:text-underline-mode", "continuous");
-    break;
-  }
 }
 
 void fillLocale(librevenge::RVNGPropertyList &props, const unsigned lcid)
@@ -926,7 +908,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     librevenge::RVNGPropertyList props;
     setRectCoordProps(textCoord, &props);
     double textRotation = thisTransform.getRotation();
-    if (textRotation != 0)
+    if (textRotation < 0 || textRotation > 0)
     {
       props.insert("librevenge:rotate", textRotation * 180 / M_PI);
     }
@@ -1248,7 +1230,7 @@ const char *MSPUBCollector::getCalculatedEncoding() const
     goto csd_fail;
   }
   // don't worry, the below call doesn't require a null-terminated string.
-  ucsdet_setText(ucd, (const char *)m_allText.data(), m_allText.size(), &status);
+  ucsdet_setText(ucd, (const char *)m_allText.data(), (int32_t) m_allText.size(), &status);
   if (U_FAILURE(status))
   {
     goto csd_fail;
@@ -1332,7 +1314,7 @@ double MSPUBCollector::getSpecialValue(const ShapeInfo &info, const CustomShape 
   if (arg == ASPECT_RATIO)
   {
     const Coordinate coord = info.m_coordinates.get_value_or(Coordinate());
-    return coord.getHeightIn() != 0 ? double(coord.getWidthIn()) / coord.getHeightIn() : 0;
+    return (coord.getHeightIn() < 0 || coord.getHeightIn() > 0) ? double(coord.getWidthIn()) / coord.getHeightIn() : 0;
   }
   if (arg & OTHER_CALC_VAL)
   {
@@ -1394,7 +1376,7 @@ double MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index
   case 14:
     return valOne + valTwo - valThree;
   case 1:
-    return valOne * valTwo / (valThree == 0 ? 1 : valThree);
+    return valOne * valTwo / ((valThree <= 0 && valThree >= 0) ? 1 : valThree);
   case 2:
     return (valOne + valTwo) / 2;
   case 3:
@@ -1404,7 +1386,7 @@ double MSPUBCollector::getCalculationValue(const ShapeInfo &info, unsigned index
   case 5:
     return std::max(valOne, valTwo);
   case 6:
-    return valOne ? valTwo : valThree;
+    return (valOne<0 || valOne>0) ? valTwo : valThree;
   case 7:
     return sqrt(valOne * valTwo * valThree);
   case 8:
@@ -1547,7 +1529,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
                            defaultStyle.m_lineSpacing.get_value_or(LineSpacingInfo()));
   LineSpacingType lineSpacingType = info.m_type;
   double lineSpacing = info.m_amount;
-  if (!(lineSpacingType == LINE_SPACING_SP && lineSpacing == 1))
+  if (!(lineSpacingType == LINE_SPACING_SP && lineSpacing <= 1 && lineSpacing >= 1))
   {
     if (lineSpacingType == LINE_SPACING_SP)
     {
@@ -1734,6 +1716,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
   case SUBSCRIPT:
     ret.insert("style:text-position", "-50% 67%");
     break;
+  case NO_SUPER_SUB:
   default:
     break;
   }
@@ -1848,7 +1831,8 @@ void MSPUBCollector::writePageBackground(unsigned pageSeqNum) const
     {
       ShapeInfo bg;
       bg.m_type = RECTANGLE;
-      Coordinate wholePage(-m_width/2 * EMUS_IN_INCH, -m_height/2 * EMUS_IN_INCH, m_width/2 * EMUS_IN_INCH, m_height/2 * EMUS_IN_INCH);
+      Coordinate wholePage(int(-m_width/2 * EMUS_IN_INCH), int(-m_height/2 * EMUS_IN_INCH),
+                           int(m_width/2 * EMUS_IN_INCH), int(m_height/2 * EMUS_IN_INCH));
       bg.m_coordinates = wholePage;
       bg.m_pageSeqNum = pageSeqNum;
       bg.m_fill = ptr_fill;

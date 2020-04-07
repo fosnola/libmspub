@@ -14,7 +14,7 @@ namespace libmspub
 
 Color ColorReference::getRealColor(unsigned c, const std::vector<Color> &palette) const
 {
-  unsigned char type = (c >> 24) & 0xFF;
+  unsigned char type = (unsigned char)((c >> 24) & 0xFF);
   if (type == 0x08)
   {
     if ((c & 0xFFFFFF) >= palette.size())
@@ -27,7 +27,7 @@ Color ColorReference::getRealColor(unsigned c, const std::vector<Color> &palette
 }
 Color ColorReference::getFinalColor(const std::vector<Color> &palette) const
 {
-  unsigned char modifiedType = (m_modifiedColor >> 24) & 0xFF;
+  unsigned char modifiedType = (unsigned char)((m_modifiedColor >> 24) & 0xFF);
   if (modifiedType == CHANGE_INTENSITY)
   {
     Color c = getRealColor(m_baseColor, palette);
@@ -35,11 +35,11 @@ Color ColorReference::getFinalColor(const std::vector<Color> &palette) const
     double intensity = (double)((m_modifiedColor >> 16) & 0xFF) / 0xFF;
     if (changeIntensityBase == BLACK_BASE)
     {
-      return Color(c.r * intensity, c.g * intensity, c.b * intensity);
+      return Color((unsigned char)(c.r * intensity), (unsigned char)(c.g * intensity), (unsigned char)(c.b * intensity));
     }
     if (changeIntensityBase == WHITE_BASE)
     {
-      return Color(c.r + (255 - c.r) * (1 - intensity), c.g + (255 - c.g) * (1 - intensity), c.b + (255 - c.b) * (1 - intensity));
+      return Color((unsigned char)(c.r + (255 - c.r) * (1 - intensity)), (unsigned char)(c.g + (255 - c.g) * (1 - intensity)), (unsigned char)(c.b + (255 - c.b) * (1 - intensity)));
     }
     return Color();
   }

@@ -98,13 +98,13 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   CharacterStyle charStyle;
   ParagraphStyle paraStyle;
 
-  unsigned oldParaPos=0; // used to check for empty line
-  unsigned actChar=0;
+  size_t oldParaPos=0; // used to check for empty line
+  size_t actChar=0;
   for (unsigned c=0; c<length; ++c)
   {
     // change of style
     auto actPos=input->tell();
-    auto cIt=posToSpanMap.find(actPos);
+    auto cIt=posToSpanMap.find((unsigned) actPos);
     if (cIt!=posToSpanMap.end())
     {
       if (!spanChars.empty())
@@ -116,7 +116,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       if (cIt->second<spanStyles.size())
         charStyle=spanStyles[cIt->second];
     }
-    auto pIt=posToParaMap.find(actPos);
+    auto pIt=posToParaMap.find((unsigned) actPos);
     auto specialIt=posToTypeMap.find(c);
     if (pIt!=posToParaMap.end())
     {
@@ -127,7 +127,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         spanChars.clear();
       }
       bool needNewPara=!paraSpans.empty();
-      if (!needNewPara && oldParaPos>=actPos-3)   // potential empty line
+      if (!needNewPara && oldParaPos+3>=unsigned(actPos))   // potential empty line
       {
         auto sIt=specialIt;
         if (sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd) ++sIt;
@@ -166,7 +166,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         paraSpans.clear();
       }
       if (specialIt->second==CellEnd)
-        cellEnds.push_back(actChar+1); // offset begin at 1...
+        cellEnds.push_back(unsigned(actChar)+1); // offset begin at 1...
       if (specialIt->second==ShapeEnd)
       {
         if (!cellEnds.empty())
@@ -373,7 +373,7 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
         }
       }
     }
-    unsigned newId=styles.size();
+    unsigned newId=unsigned(styles.size());
     posToStyle[positions[i]]=newId;
     offsetToStyleMap[offs]=newId;
     styles.push_back(style);
@@ -425,7 +425,7 @@ bool MSPUBParser97::parseSpanStyles(librevenge::RVNGInputStream *input, unsigned
       continue;
     }
 
-    unsigned newId=styles.size();
+    unsigned newId=unsigned(styles.size());
     posToStyle[positions[i]]=newId;
     offsetToStyleMap[offs]=newId;
     styles.push_back(readCharacterStyle(input, len));
@@ -438,7 +438,7 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
 {
   CharacterStyle style;
 
-  unsigned begin = input->tell();
+  unsigned begin = unsigned(input->tell());
   int textSizeVariationFromDefault = 0;
 
   if (length >= 1)
@@ -475,6 +475,7 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
       switch (fl&3)
       {
       case 0: // none
+      default:
         break;
       case 1:
       case 2:
@@ -505,7 +506,7 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
 void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType)
 {
   length = std::min(length, m_length); // sanity check
-  unsigned start = input->tell();
+  unsigned start = unsigned(input->tell());
   unsigned char last = '\0';
   unsigned pos=0;
   while (stillReading(input, start + length))
@@ -558,8 +559,8 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     return;
   }
   input->seek(2, librevenge::RVNG_SEEK_CUR); // flags: 40=selected, 1=shadow
-  int colors[2];
-  for (auto &c : colors) c=int(readU8(input));
+  unsigned char colors[2];
+  for (auto &c : colors) c=readU8(input);
   int patternId=int(readU8(input));
   int numBorders=1;
   int bColors[4];
@@ -619,7 +620,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   }
   else if (header.m_type==C_CustomShape)
   {
-    ShapeType shapeType = getShapeType(readU16(input));
+    ShapeType shapeType = getShapeType((unsigned char)readU16(input));
     if (shapeType != UNKNOWN_SHAPE)
     {
       m_collector->setShapeType(seqNum, shapeType);
@@ -707,7 +708,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
         unsigned((1-delta)*double(lineColor.g)+delta*255),
         unsigned((1-delta)*double(lineColor.b)+delta*255)
       };
-      m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), widths[wh]*12700, widths[wh]>0));
+      m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[wh]*12700), widths[wh]>0));
     }
   }
   else if (widths[0]>0)
@@ -720,7 +721,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       unsigned((1-delta)*double(lineColor.g)+delta*255),
       unsigned((1-delta)*double(lineColor.b)+delta*255)
     };
-    m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), widths[0]*12700, true));
+    m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[0]*12700), true));
     m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
     m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
   }
