@@ -49,6 +49,8 @@ class MSPUBParser97 : public MSPUBParser2k
   CharacterStyle readCharacterStyle(librevenge::RVNGInputStream *input,
                                     unsigned length);
   void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
+  void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
+                          unsigned numCols, unsigned numRows, unsigned width, unsigned height);
   void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input) override;
   void getTextInfo(librevenge::RVNGInputStream *input, unsigned length, std::map<unsigned,MSPUBParser97::What> &posToType);
 public:

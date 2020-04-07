@@ -865,6 +865,69 @@ unsigned MSPUBParser97::getShapeFillColorOffset() const
   return 0x18;
 }
 
+void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
+                                       unsigned numCols, unsigned numRows, unsigned width, unsigned height)
+{
+  if (!numRows || !numCols || numRows>128 || numCols>128) {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: unexpected number of rows/columns\n"));
+    return;
+  }
+
+  TableInfo ti(numRows, numCols);
+  if (header.hasData())
+  {
+    input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+    ListHeader2k listHeader;
+    if (!parseListHeader(input, header.m_endOffset, listHeader, false) || listHeader.m_dataSize!=14 || listHeader.m_N<int(numCols+numRows))
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: can not read the data zone\n"));
+    }
+    else
+    {
+      for (int wh=0; wh<2; ++wh)
+      {
+        unsigned num=wh==0 ? numCols : numRows;
+        std::vector<unsigned> &sizes=wh==0 ? ti.m_columnWidthsInEmu : ti.m_rowHeightsInEmu;
+        sizes.reserve(size_t(num));
+        unsigned actPos=0;
+        for (unsigned i=0; i<num; ++i)
+        {
+          unsigned newPos=readU32(input);
+          if (newPos<actPos)
+          {
+            MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: oops a position is bad\n"));
+            sizes.push_back((wh==0 ? width : height)/num);
+          }
+          else
+          {
+            sizes.push_back(newPos-actPos);
+            actPos=newPos;
+          }
+          input->seek(10, librevenge::RVNG_SEEK_CUR);
+        }
+      }
+    }
+  }
+  else
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: can not find the data zone\n"));
+  }
+  // just in case we have no read all row/columns
+  ti.m_rowHeightsInEmu.resize(size_t(numRows),height/numRows);
+  ti.m_columnWidthsInEmu.resize(size_t(numCols),width/numCols);
+  for (unsigned r=0; r<numRows; r++)
+  {
+    CellInfo cellInfo;
+    cellInfo.m_startRow=cellInfo.m_endRow=r;
+    for (unsigned c=0; c<numCols; c++)
+    {
+      cellInfo.m_startColumn=cellInfo.m_endColumn=c;
+      ti.m_cells.push_back(cellInfo);
+    }
+  }
+  m_collector->setShapeTableInfo(seqNum, ti);
+}
+
 void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
@@ -942,25 +1005,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       unsigned width=readU32(input);
       unsigned height=readU32(input);
       if (numRows && numCols)
-      {
-        TableInfo ti(numRows, numCols);
-        // FIXME
-        std::vector<unsigned> rowHeightsInEmu(size_t(numRows),height/numRows);
-        std::vector<unsigned> columnWidthsInEmu(size_t(numCols),width/numCols);
-        ti.m_rowHeightsInEmu = rowHeightsInEmu;
-        ti.m_columnWidthsInEmu = columnWidthsInEmu;
-        for (unsigned r=0; r<numRows; r++)
-        {
-          CellInfo cellInfo;
-          cellInfo.m_startRow=cellInfo.m_endRow=r;
-          for (unsigned c=0; c<numCols; c++)
-          {
-            cellInfo.m_startColumn=cellInfo.m_endColumn=c;
-            ti.m_cells.push_back(cellInfo);
-          }
-        }
-        m_collector->setShapeTableInfo(seqNum, ti);
-      }
+        parseTableInfoData(input, seqNum, header, numCols, numRows, width, height);
     }
   }
   else if (header.m_type==C_CustomShape && input->tell()+12<=header.m_dataOffset)

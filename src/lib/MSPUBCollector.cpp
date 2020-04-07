@@ -962,7 +962,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       {
         librevenge::RVNGPropertyList rowProps;
         if (row < (get(info.m_tableInfo).m_rowHeightsInEmu.size()))
-          rowProps.insert("librevenge:row-height", double(get(info.m_tableInfo).m_rowHeightsInEmu[row]) / EMUS_IN_INCH);
+          rowProps.insert("style:row-height", double(get(info.m_tableInfo).m_rowHeightsInEmu[row]) / EMUS_IN_INCH);
         m_painter->openTableRow(rowProps);
 
         for (unsigned col = 0; col != tableLayout.shape()[1]; ++col)
