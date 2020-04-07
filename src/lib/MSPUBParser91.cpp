@@ -300,6 +300,9 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       std::vector<TextSpan> paraSpans;
       CharacterStyle charStyle;
       ParagraphStyle paraStyle;
+      auto pIt=posToParaMap.find(input->tell()-1);
+      if (pIt!=posToParaMap.end())
+        paraStyle=pIt->second;
       for (unsigned p=textLimits[i]; p<textLimits[i+1]; ++p)
       {
         auto cIt=posToSpanMap.find(input->tell());
@@ -312,7 +315,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
           }
           charStyle=cIt->second;
         }
-        auto pIt=posToParaMap.find(input->tell());
+        pIt=posToParaMap.find(input->tell());
         if (pIt!=posToParaMap.end())
         {
           if (!spanChars.empty())
@@ -374,6 +377,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       }
       if (!spanChars.empty())
         paraSpans.push_back(TextSpan(spanChars,charStyle));
+      if (paraStyle.m_align)  std::cout << "align=" << *paraStyle.m_align << "\n";
       if (!paraSpans.empty())
         shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
       m_collector->addTextString(shapeParas, zId);
@@ -412,13 +416,13 @@ bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
     input->seek(index*0x200+2*offs, librevenge::RVNG_SEEK_SET); // skip small size
     uint8_t len=readU8(input);
     uint8_t tabPos=readU8(input);
-    uint8_t tabFlags=readU8(input);
-    if (tabPos<2 || 2*offs+1+tabPos>0x200 || 2*len+1<tabPos+(tabFlags?3:0))
+    if (tabPos<2 || 2*offs+1+tabPos>0x200 || 2*len+1<tabPos)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseParagraphStyles: can not read len for i=%x for index=%x\n", i, index));
       posToStyle[positions[i]]=ParagraphStyle();
       continue;
     }
+    input->seek(1,librevenge::RVNG_SEEK_CUR); // 0
     ParagraphStyle style;
     if (tabPos>=3)
     {
@@ -466,7 +470,7 @@ bool MSPUBParser91::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
       style.m_spaceAfterEmu=readU8(input)*635;
       input->seek(1, librevenge::RVNG_SEEK_CUR);
     }
-    if (tabFlags)
+    if (1+tabPos+3<2*len+1)
     {
       input->seek(index*0x200+2*offs+1+tabPos, librevenge::RVNG_SEEK_SET);
       auto tabLen=readU8(input);
