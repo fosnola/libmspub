@@ -200,29 +200,12 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         charStyle=spanStyles[cIt->second];
     }
     auto pIt=posToParaMap.find((unsigned) actPos);
-    auto specialIt=posToTypeMap.find(c);
     if (pIt!=posToParaMap.end())
     {
-      if (!spanChars.empty())
-      {
-        actChar+=spanChars.size();
-        paraSpans.push_back(TextSpan(spanChars,charStyle));
-        spanChars.clear();
-      }
-      bool needNewPara=!paraSpans.empty();
-      if (!needNewPara && oldParaPos+3>=unsigned(actPos))   // potential empty line
-      {
-        auto sIt=specialIt;
-        if (sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd) ++sIt;
-        needNewPara=sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd;
-      }
-      if (needNewPara)
-      {
-        shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
-        paraSpans.clear();
-      }
-      if (pIt!=posToParaMap.end() && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
-      oldParaPos=unsigned(actPos);
+      if (pIt->second<paraStyles.size())
+        paraStyle=paraStyles[pIt->second];
+      else
+        paraStyle=ParagraphStyle();
     }
     auto cellIt=posToCellMap.find((unsigned) actPos);
     if (cellIt!=posToCellMap.end())
@@ -234,6 +217,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     }
     unsigned char ch=readU8(input);
     // special character
+    auto specialIt=posToTypeMap.find(c);
     if (specialIt!=posToTypeMap.end())
     {
       if (!spanChars.empty())
@@ -283,11 +267,19 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         }
         continue;
       }
-      if (!paraSpans.empty())   // end of line or shape
+      bool needNewPara=!paraSpans.empty();
+      if (!needNewPara && oldParaPos+2>=unsigned(actPos) && specialIt->second==LineEnd)
+      {
+        auto sIt=specialIt;
+        if (sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd) ++sIt;
+        needNewPara=sIt==posToTypeMap.end() || sIt->second!=ShapeEnd;
+      }
+      if (needNewPara)
       {
         shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
         paraSpans.clear();
       }
+      oldParaPos=unsigned(actPos);
       if (specialIt->second==CellEnd)
         cellEnds.push_back(unsigned(actChar)+1); // offset begin at 1...
       if (specialIt->second==ShapeEnd)
@@ -359,9 +351,9 @@ bool MSPUBParser97::parseCellStyles(librevenge::RVNGInputStream *input, unsigned
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseCellStyles: N value=%d is too big for index=%x\n", N, index));
     return false;
   }
-  input->seek(index*0x200, librevenge::RVNG_SEEK_SET);
+  input->seek(index*0x200+4, librevenge::RVNG_SEEK_SET);
   std::vector<unsigned> positions;
-  positions.resize(N+1);
+  positions.resize(N);
   for (auto &p : positions) p=readU32(input);
   std::vector<uint8_t> stylePos;
   stylePos.reserve(N);
@@ -476,10 +468,10 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseParagraphStyles: N value=%d is too big for index=%x\n", N, index));
     return false;
   }
-  input->seek(index*0x200, librevenge::RVNG_SEEK_SET);
+  input->seek(index*0x200+4, librevenge::RVNG_SEEK_SET);
   std::vector<unsigned> positions;
-  positions.resize(N+1);
-  for (auto &p : positions) p=readU32(input);
+  positions.resize(N);
+  for (auto &p : positions) p=readU32(input)-1;
   std::vector<uint8_t> stylePos;
   stylePos.reserve(N);
   for (unsigned i=0; i<N; ++i) stylePos.push_back(readU8(input));
@@ -868,7 +860,8 @@ unsigned MSPUBParser97::getShapeFillColorOffset() const
 void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
                                        unsigned numCols, unsigned numRows, unsigned width, unsigned height)
 {
-  if (!numRows || !numCols || numRows>128 || numCols>128) {
+  if (!numRows || !numCols || numRows>128 || numCols>128)
+  {
     MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: unexpected number of rows/columns\n"));
     return;
   }
