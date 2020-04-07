@@ -515,7 +515,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   bColors[0]=int(readU8(input));
   auto w=readU8(input);
   widths[0]=(w&0x80) ? double(w&0x7f)/4 : double(w);
-  input->seek(2,librevenge::RVNG_SEEK_CUR);
+  input->seek(2,librevenge::RVNG_SEEK_CUR); // 0
   int borderId=0xfffe; // none
   if (header.isRectangle())
   {
@@ -527,6 +527,32 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       bColors[j]=int(readU8(input));
       w=readU8(input);
       widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+    }
+  }
+  else if (header.m_type==C_Line)
+  {
+    input->seek(16, librevenge::RVNG_SEEK_CUR);
+    auto flags=readU16(input);
+    if ((flags&0x1)==0)
+      m_collector->setShapeFlip(seqNum, true, false);
+    if (flags&0x6)
+    {
+      Arrow const begArrows[]=
+      {
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE), // default
+        Arrow(TRIANGLE_ARROW, MEDIUM, LARGE),
+        Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM),
+        Arrow(TRIANGLE_ARROW, MEDIUM, SMALL),
+        Arrow(LINE_ARROW, MEDIUM, LARGE),
+        Arrow(LINE_ARROW, MEDIUM, MEDIUM),
+        Arrow(LINE_ARROW, MEDIUM, SMALL)
+      };
+      int numArrows=int(MSPUB_N_ELEMENTS(begArrows));
+      int actArrow=(flags>>4)>numArrows ? 0 : (flags>>4);
+      if (flags&0x2)
+        m_collector->setShapeEndArrow(seqNum, begArrows[actArrow]);
+      if (flags&0x4)
+        m_collector->setShapeBeginArrow(seqNum, begArrows[actArrow]);
     }
   }
   if (borderId>=0x8000)

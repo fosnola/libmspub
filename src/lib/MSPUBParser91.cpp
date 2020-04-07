@@ -781,9 +781,9 @@ bool MSPUBParser91::parseShape(librevenge::RVNGInputStream *input, BlockInfo91 c
     if ((flags&0x10)==0)
       m_collector->setShapeFlip(info.m_id, true, false);
     if (flags&0x20)
-      m_collector->setShapeEndArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM));
+      m_collector->setShapeEndArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, LARGE));
     if (flags&0x40)
-      m_collector->setShapeBeginArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, MEDIUM));
+      m_collector->setShapeBeginArrow(info.m_id, Arrow(TRIANGLE_ARROW, MEDIUM, LARGE));
     m_collector->setShapeType(info.m_id,LINE);
     break;
   case 5:
