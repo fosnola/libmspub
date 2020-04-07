@@ -85,7 +85,14 @@ bool libmspub::MSPUBMetaData::parse(librevenge::RVNGInputStream *input)
   if (!input)
     return false;
 
-  readPropertySetStream(input);
+  try
+  {
+    readPropertySetStream(input);
+  }
+  catch (...)
+  {
+    MSPUB_DEBUG_MSG(("libmspub::MSPUBMetaData::parse: catch exception\n"));
+  }
 
   return true;
 }
