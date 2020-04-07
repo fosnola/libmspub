@@ -184,18 +184,6 @@ void createTableLayout(const std::vector<CellInfo> &cells, TableLayout &tableLay
 
     const unsigned rowSpan = it->m_endRow - it->m_startRow + 1;
     const unsigned colSpan = it->m_endColumn - it->m_startColumn + 1;
-
-    if ((rowSpan == 0) != (colSpan == 0))
-    {
-      MSPUB_DEBUG_MSG((
-                        "cell %u (rows %u to %u, columns %u to %u) has got 0 span in one dimension, ignoring\n",
-                        unsigned(int(it - cells.begin())),
-                        it->m_startRow, it->m_endRow,
-                        it->m_startColumn, it->m_endColumn
-                      ));
-      continue;
-    }
-
     TableLayoutCell &layoutCell = tableLayout[it->m_startRow][it->m_startColumn];
     layoutCell.m_cell = unsigned(int(it - cells.begin()));
     layoutCell.m_rowSpan = rowSpan;
@@ -995,7 +983,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         styles=&stylesIt->second;
         numStyles=unsigned(styles->size());
       }
-      unsigned cell=0;
+      unsigned cell=0, cellParaId=0;
       for (unsigned row = 0; row != tableLayout.shape()[0]; ++row)
       {
         librevenge::RVNGPropertyList rowProps;
@@ -1003,7 +991,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
           rowProps.insert("style:row-height", double(get(info.m_tableInfo).m_rowHeightsInEmu[row]) / EMUS_IN_INCH);
         m_painter->openTableRow(rowProps);
 
-        for (unsigned col = 0; col != tableLayout.shape()[1]; ++col)
+        for (unsigned col = 0; col != tableLayout.shape()[1]; ++col, ++cellParaId)
         {
           librevenge::RVNGPropertyList cellProps;
           cellProps.insert("librevenge:column", int(col));
@@ -1022,11 +1010,11 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
               cellProps.insert("table:number-rows-spanned", int(tableLayout[row][col].m_rowSpan));
 
             m_painter->openTableCell(cellProps);
-
-            if (tableLayout[row][col].m_cell < paraToCellMap.size())
+            auto paraId=info.m_tableInfo->m_tableCoveredCellHasTextFlag ? cellParaId : tableLayout[row][col].m_cell;
+            if (paraId < paraToCellMap.size())
             {
               TextLineState state;
-              const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[tableLayout[row][col].m_cell];
+              const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[paraId];
               for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
               {
                 openTextLine(state, text[para].style);

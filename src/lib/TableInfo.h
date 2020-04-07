@@ -52,9 +52,11 @@ struct TableInfo
   unsigned m_numRows;
   unsigned m_numColumns;
   std::vector<CellInfo> m_cells;
+  bool m_tableCoveredCellHasTextFlag;
+
   TableInfo(unsigned numRows, unsigned numColumns) : m_rowHeightsInEmu(),
     m_columnWidthsInEmu(), m_numRows(numRows), m_numColumns(numColumns),
-    m_cells()
+    m_cells(), m_tableCoveredCellHasTextFlag(false)
   {
   }
 };

@@ -246,8 +246,6 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   for (auto const &it : m_chunkIdToTextEndMap) textEndToChunkId[it.second]=it.first;
   size_t oldParaPos=0; // used to check for empty line
   size_t actChar=0;
-  bool overridenCell=false;
-  bool prevOverridenCell=false;
   std::vector<CellStyle> cellStyleList;
   for (unsigned c=0; c<length; ++c)
   {
@@ -274,15 +272,10 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         paraStyle=ParagraphStyle();
     }
     auto cellIt=posToCellMap.find((unsigned) actPos);
-    prevOverridenCell=overridenCell;
-    overridenCell=false;
     if (cellIt!=posToCellMap.end())
     {
       if (cellIt->second<=cellStyles.size())
-      {
         cellStyleList.push_back(cellStyles[cellIt->second]);
-        overridenCell=cellStyleList.back().m_flags&4; // cell is overriden
-      }
       else
         cellStyleList.push_back(CellStyle());
     }
@@ -351,12 +344,11 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
 
       if (needNewPara)
       {
-        if (!overridenCell) // we must not send anything if this is an overriden cell
-          shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
+        shapeParas.push_back(TextParagraph(paraSpans, paraStyle));
         paraSpans.clear();
       }
       oldParaPos=unsigned(actPos);
-      if (special==CellEnd && !prevOverridenCell)
+      if (special==CellEnd)
         cellEnds.push_back(unsigned(actChar)+1); // offset begin at 1...
       if (special==ShapeEnd || isEndShape)
       {
@@ -976,6 +968,7 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
   }
 
   TableInfo ti(numRows, numCols);
+  ti.m_tableCoveredCellHasTextFlag=true;
   if (header.hasData())
   {
     input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
