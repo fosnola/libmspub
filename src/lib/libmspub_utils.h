@@ -114,6 +114,7 @@ class GenericException
 
 librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData);
 librevenge::RVNGBinaryData createPNGForSimplePattern(uint8_t const(&pattern)[8], Color const &col0, Color const &col1);
+bool readData(librevenge::RVNGInputStream *input, unsigned long sz, librevenge::RVNGBinaryData &data);
 
 } // namespace libmspub
 

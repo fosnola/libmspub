@@ -555,6 +555,23 @@ librevenge::RVNGBinaryData createPNGForSimplePattern(uint8_t const(&pattern)[8],
   return res;
 }
 
+bool readData(librevenge::RVNGInputStream *input, unsigned long size, librevenge::RVNGBinaryData &data)
+{
+  data.clear();
+  if (!input || size == 0) return true;
+
+  const unsigned char *readData;
+  unsigned long sizeRead;
+  if ((readData=input->read(size, sizeRead)) == nullptr || sizeRead==0)
+    return false;
+  if (sizeRead!=size)
+  {
+    MSPUB_DEBUG_MSG(("libmspub::readData: can only read %ld/%ld bytes\n", long(sizeRead), long(size)));
+  }
+  data.append(readData, sizeRead);
+
+  return true;
+}
 }
 
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

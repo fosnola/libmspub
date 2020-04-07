@@ -20,6 +20,16 @@ VectorTransformation2D::VectorTransformation2D() : m_m11(1), m_m12(0), m_m21(0),
 {
 }
 
+VectorTransformation2D::VectorTransformation2D(double m11, double m12, double m21, double m22, double x, double y)
+  : m_m11(m11)
+  , m_m12(m12)
+  , m_m21(m21)
+  , m_m22(m22)
+  , m_x(x)
+  , m_y(y)
+{
+}
+
 //We choose by convention to make function composition LEFT-multiplication, rather than right.
 VectorTransformation2D operator*(const VectorTransformation2D &l, const VectorTransformation2D &r)
 {
@@ -49,6 +59,16 @@ VectorTransformation2D VectorTransformation2D::fromTranslate(double x, double y)
   ret.m_m21 = ret.m_m12 = 0;
   ret.m_x = x;
   ret.m_y = y;
+  return ret;
+}
+
+VectorTransformation2D VectorTransformation2D::fromScaling(double x, double y)
+{
+  VectorTransformation2D ret;
+  ret.m_m11 = x;
+  ret.m_m22 = y;
+  ret.m_m21 = ret.m_m12 = 0;
+  ret.m_x = ret.m_y = 0;
   return ret;
 }
 
@@ -115,6 +135,13 @@ bool VectorTransformation2D::orientationReversing() const
 {
   // Is the determinant negative?
   return m_m11 * m_m22 < m_m12 * m_m21;
+}
+
+bool VectorTransformation2D::isSimple() const
+{
+  return m_m11> 0 && m_m22 > 0 &&
+         m_m12<=0 && m_m12>=0 &&
+         m_m21<=0 && m_m21>=0;
 }
 
 }

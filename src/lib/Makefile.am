@@ -46,10 +46,13 @@ libmspub_@MSPUB_MAJOR_VERSION@_@MSPUB_MINOR_VERSION@_la_SOURCES = \
 	MSPUBParser91.h \
 	MSPUBParser97.cpp \
 	MSPUBParser97.h \
+	MSPUBTypes.cpp \
 	MSPUBTypes.h \
 	Margins.h \
 	NumberingDelimiter.h \
 	NumberingType.h \
+	OLEParser.cpp \
+	OLEParser.h \
 	PolygonUtils.cpp \
 	PolygonUtils.h \
 	Shadow.cpp \

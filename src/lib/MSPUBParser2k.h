@@ -88,7 +88,6 @@ protected:
   void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
                        unsigned chunkOffset);
   bool parseGroup(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned page);
-  void assignShapeImgIndex(unsigned seqNum);
   void parseShapeFill(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
   bool parseBorderArts(librevenge::RVNGInputStream *input);
   bool parseContents(librevenge::RVNGInputStream *input) override;

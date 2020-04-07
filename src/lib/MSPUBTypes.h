@@ -15,6 +15,8 @@
 
 #include <boost/optional.hpp>
 
+#include <librevenge/librevenge.h>
+
 #include "ListInfo.h"
 #include "MSPUBBlockID.h"
 #include "MSPUBBlockType.h"
@@ -220,6 +222,48 @@ struct Color
   Color() : r(0), g(0), b(0) { }
   Color(unsigned char red, unsigned char green, unsigned char blue) : r(red), g(green), b(blue) { }
   unsigned char r, g, b;
+};
+
+struct EmbeddedObject
+{
+  //! empty constructor
+  EmbeddedObject()
+    : m_dataList()
+    , m_typeList()
+  {
+  }
+  //! constructor
+  EmbeddedObject(librevenge::RVNGBinaryData const &binaryData,
+                 std::string const &type="image/pict") : m_dataList(), m_typeList()
+  {
+    add(binaryData, type);
+  }
+  //! return true if the picture contains no data
+  bool isEmpty() const
+  {
+    for (auto const &data : m_dataList)
+    {
+      if (!data.empty())
+        return false;
+    }
+    return true;
+  }
+  //! add a picture
+  void add(librevenge::RVNGBinaryData const &binaryData, std::string const &type="image/pict")
+  {
+    size_t pos=std::max(m_dataList.size(),m_typeList.size());
+    m_dataList.resize(pos+1);
+    m_dataList[pos]=binaryData;
+    m_typeList.resize(pos+1);
+    m_typeList[pos]=type;
+  }
+  /** add the link property to proplist */
+  bool addTo(librevenge::RVNGPropertyList &propList) const;
+
+  //! the picture content: one data by representation
+  std::vector<librevenge::RVNGBinaryData> m_dataList;
+  //! the picture type: one type by representation
+  std::vector<std::string> m_typeList;
 };
 
 enum PageType

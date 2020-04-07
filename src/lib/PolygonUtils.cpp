@@ -5301,12 +5301,12 @@ const CustomShape CS_CHEVRON_UP(
 
 const Vertex PIE_VERTICES[] =
 {
-  {21600, 21600}, {0,0}, {10800, 0 },  {21600, 10800 }, {10800, 10800}
+  {0,0}, {21600, 21600}, {10800, 0 },  {21600, 10800 }, {10800, 10800}
 };
 
 const unsigned short PIE_SEGMENTS[] =
 {
-  0xA304, 0x0001, 0x6000//0x4001, 0x0002, 0xA203, 0x8000
+  0xA304, 0x0001, 0x6000
 };
 
 const CustomShape CS_PIE(
@@ -5320,7 +5320,7 @@ const CustomShape CS_PIE(
 
 const Vertex CHORD_VERTICES[] =
 {
-  {21600, 21600}, {0,0},  {3163, 3163 }, {18436, 18436 }
+  {0,0},{21600, 21600},  {3163, 3163 }, {18436, 18436 }
 };
 
 const unsigned short CHORD_SEGMENTS[] =
@@ -5402,9 +5402,9 @@ const CustomShape CS_ROUND_RECT_CALLOUT_2K(
 
 const Vertex OVAL_CALLOUT_2K_VERTICES[] =
 {
-  { 10000, 17000 }, {0, 0}, {4000, 0}, { 4000, 17000},
+  {0, 0}, { 10000, 17000 }, {4000, 0}, { 4000, 17000},
   { 4000, 17000 }, { 12000, 21600 }, { 8000, 17000}, { 17600, 17000},
-  { 10000, 17000 }, {21600, 0}, { 17600, 17000},  {17600, 0}
+  { 21600, 17000 }, {10000, 0}, { 17600, 17000}, {17600, 0}
 };
 
 const unsigned short OVAL_CALLOUT_2K_SEGMENTS[] =

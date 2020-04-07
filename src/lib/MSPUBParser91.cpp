@@ -886,13 +886,7 @@ bool MSPUBParser91::parseImage(librevenge::RVNGInputStream *input, BlockInfo91 c
     }
   }
   input->seek(info.m_offset, librevenge::RVNG_SEEK_SET);
-  while (len > 0 && stillReading(input, (unsigned long)-1))
-  {
-    unsigned long howManyRead = 0;
-    const unsigned char *buf = input->read(len, howManyRead);
-    img.append(buf, howManyRead);
-    len -= howManyRead;
-  }
+  readData(input, len, img);
   m_collector->addImage(info.m_id, imgType, img);
   return true;
 }
@@ -910,13 +904,7 @@ bool MSPUBParser91::parseMetafilePicture(librevenge::RVNGInputStream *input, uns
   type=WMF;
   input->seek(-4, librevenge::RVNG_SEEK_CUR);
   length -= 8;
-  while (length > 0 && stillReading(input, (unsigned long)-1))
-  {
-    unsigned long howManyRead = 0;
-    const unsigned char *buf = input->read(length, howManyRead);
-    img.append(buf, howManyRead);
-    length -= howManyRead;
-  }
+  readData(input, length, img);
   return true;
 }
 
@@ -963,13 +951,7 @@ bool MSPUBParser91::parseOLEPicture(librevenge::RVNGInputStream *input, unsigned
   if (names[0]=="METAFILEPICT")
     return parseMetafilePicture(input, dSz, type, img);
   // ok save the data and hope that it can be read by somebody
-  while (dSz > 0 && stillReading(input, (unsigned long)-1))
-  {
-    unsigned long howManyRead = 0;
-    const unsigned char *buf = input->read(dSz, howManyRead);
-    img.append(buf, howManyRead);
-    dSz -= howManyRead;
-  }
+  readData(input, dSz, img);
   return true;
 }
 
@@ -1028,13 +1010,7 @@ bool MSPUBParser91::parseBorderArts(librevenge::RVNGInputStream *input)
       pictSize*=2;
       input->seek(header.m_positions[i]+decal[off], librevenge::RVNG_SEEK_SET);
       librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(WMF, i));
-      while (pictSize > 0 && stillReading(input, (unsigned long)-1))
-      {
-        unsigned long howManyRead = 0;
-        const unsigned char *buf = input->read(pictSize, howManyRead);
-        img.append(buf, howManyRead);
-        pictSize -= howManyRead;
-      }
+      readData(input, pictSize, img);
       unsigned newId=offsetToImage.size();
       m_collector->setBorderImageOffset(i,newId);
       if (off==0) m_collector->setShapeStretchBorderArt(i);

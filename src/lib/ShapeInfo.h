@@ -40,6 +40,7 @@ struct ShapeInfo
   boost::optional<ShapeType> m_cropType;
   boost::optional<unsigned> m_imgIndex;
   boost::optional<unsigned> m_borderImgIndex;
+  boost::optional<unsigned> m_OLEIndex;
   boost::optional<Coordinate> m_coordinates;
   std::vector<Line> m_lines;
   boost::optional<unsigned> m_pageSeqNum;
@@ -67,7 +68,7 @@ struct ShapeInfo
   std::vector<libmspub::Vertex> m_clipPath;
   boost::optional<int> m_pictureBrightness;
   boost::optional<int> m_pictureContrast;
-  ShapeInfo() : m_type(), m_cropType(), m_imgIndex(), m_borderImgIndex(),
+  ShapeInfo() : m_type(), m_cropType(), m_imgIndex(), m_borderImgIndex(), m_OLEIndex(),
     m_coordinates(), m_lines(), m_pageSeqNum(),
     m_textId(), m_adjustValuesByIndex(), m_adjustValues(),
     m_rotation(), m_flips(), m_margins(), m_borderPosition(),

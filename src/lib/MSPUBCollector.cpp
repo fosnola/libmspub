@@ -481,6 +481,7 @@ MSPUBCollector::MSPUBCollector(librevenge::RVNGDrawingInterface *painter) :
   m_widthSet(false), m_heightSet(false),
   m_numPages(0), m_textStringsById(), m_pagesBySeqNum(),
   m_images(), m_borderImages(),
+  m_OLEs(),
   m_textColors(), m_fonts(),
   m_defaultCharStyles(), m_defaultParaStyles(), m_shapeTypesBySeqNum(),
   m_paletteColors(), m_shapeSeqNumsOrdered(),
@@ -700,7 +701,18 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     return std::bind(&endShapeGroup, m_painter);
   }
   librevenge::RVNGPropertyList graphicsProps;
-  if (info.m_fill)
+  bool isOLE=info.m_OLEIndex && m_OLEs.find(*info.m_OLEIndex)!=m_OLEs.end();
+  if (isOLE && !foldedTransform.isSimple())
+  {
+    auto const &obj=m_OLEs.find(*info.m_OLEIndex)->second;
+    graphicsProps.insert("draw:fill", "bitmap");
+    graphicsProps.insert("librevenge:mime-type", !obj.m_typeList.empty() ? obj.m_typeList[0].c_str() : "image/pict");
+    graphicsProps.insert("draw:fill-image", obj.m_dataList[0].getBase64Data());
+    graphicsProps.insert("draw:fill-image-ref-point", "top-left");
+
+    isOLE=false;
+  }
+  else if (info.m_fill)
   {
     info.m_fill->getProperties(&graphicsProps);
   }
@@ -729,7 +741,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
   auto hasText = bool(maybeText);
   const auto isTable = bool(info.m_tableInfo);
   bool makeLayer = hasBorderArt ||
-                   (hasStroke && hasFill) || (hasStroke && hasText) || (hasFill && hasText);
+                   (hasStroke && hasFill) || (hasStroke && isOLE) || (hasStroke && hasText) || (hasFill && hasText);
   if (makeLayer)
   {
     if (info.m_clipPath.size() > 0)
@@ -759,7 +771,7 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     type = info.m_type.get_value_or(RECTANGLE);
   }
 
-  if (hasFill)
+  if (hasFill || isOLE)
   {
     double x, y, height, width;
     x = coord.getXIn(m_width);
@@ -777,6 +789,21 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
         height -= 2 * borderImgWidth;
         width -= 2 * borderImgWidth;
       }
+    }
+    if (isOLE)
+    {
+      auto orig = foldedTransform.transform(Vector2D(x,y));
+      auto end = foldedTransform.transform(Vector2D(x+width,y+height));
+      m_painter->setStyle(graphicsProps);
+      librevenge::RVNGPropertyList list;
+      list.insert("svg:x", orig.m_x);
+      list.insert("svg:y", orig.m_y);
+      list.insert("svg:width", end.m_x-orig.m_x);
+      list.insert("svg:height", end.m_y-orig.m_y);
+      auto const &obj=m_OLEs.find(*info.m_OLEIndex)->second;
+      obj.addTo(list);
+      m_painter->drawGraphicObject(list);
+      return &no_op;
     }
     if (bool(info.m_pictureRecolor))
     {
@@ -1437,6 +1464,11 @@ void MSPUBCollector::setShapeImgIndex(unsigned seqNum, unsigned index)
   m_shapeInfosBySeqNum[seqNum].m_imgIndex = index;
 }
 
+void MSPUBCollector::setShapeOLEIndex(unsigned seqNum, unsigned index)
+{
+  m_shapeInfosBySeqNum[seqNum].m_OLEIndex = index;
+}
+
 void MSPUBCollector::setShapeDash(unsigned seqNum, const Dash &dash)
 {
   m_shapeInfosBySeqNum[seqNum].m_dash = dash;
@@ -1885,7 +1917,7 @@ void MSPUBCollector::setHeightInEmu(unsigned long heightInEmu)
   m_heightSet = true;
 }
 
-bool MSPUBCollector::addImage(unsigned index, ImgType type, librevenge::RVNGBinaryData img)
+bool MSPUBCollector::addImage(unsigned index, ImgType type, librevenge::RVNGBinaryData const &img)
 {
   while (m_images.size() < index)
   {
@@ -1912,6 +1944,17 @@ librevenge::RVNGBinaryData *MSPUBCollector::addBorderImage(ImgType type,
   }
   m_borderImages[borderArtIndex].m_images.push_back(BorderImgInfo(type));
   return &(m_borderImages[borderArtIndex].m_images.back().m_imgBlob);
+}
+
+bool MSPUBCollector::addOLE(unsigned index, EmbeddedObject const &ole)
+{
+  if (m_OLEs.find(index)!=m_OLEs.end())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBCollector::addOLE: OLE %x already exists.\n", index));
+    return false;
+  }
+  m_OLEs[index]=ole;
+  return true;
 }
 
 void MSPUBCollector::setBorderImageOffset(unsigned index, unsigned offset)

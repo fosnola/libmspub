@@ -61,9 +61,10 @@ public:
   bool addPage(unsigned seqNum);
   bool addTextString(const std::vector<TextParagraph> &str, unsigned id);
   void addTextShape(unsigned stringId, unsigned seqNum);
-  bool addImage(unsigned index, ImgType type, librevenge::RVNGBinaryData img);
+  bool addImage(unsigned index, ImgType type, librevenge::RVNGBinaryData const &img);
   void setBorderImageOffset(unsigned index, unsigned offset);
   librevenge::RVNGBinaryData *addBorderImage(ImgType type, unsigned borderArtIndex);
+  bool addOLE(unsigned index, EmbeddedObject const &ole);
   void setShapePage(unsigned seqNum, unsigned pageSeqNum);
 
   void setNextPage(unsigned seqNum);
@@ -77,6 +78,7 @@ public:
   void setShapeBorderImageId(unsigned seqNum, unsigned borderImageId);
   void setShapeCoordinatesInEmu(unsigned seqNum, int xs, int ys, int xe, int ye);
   void setShapeImgIndex(unsigned seqNum, unsigned index);
+  void setShapeOLEIndex(unsigned seqNum, unsigned index);
   void setShapeFill(unsigned seqNum, std::shared_ptr<Fill> fill, bool skipIfNotBg);
   void setShapeDash(unsigned seqNum, const Dash &dash);
   void setAdjustValue(unsigned seqNum, unsigned index, int adjust);
@@ -150,6 +152,7 @@ private:
   std::map<unsigned, PageInfo> m_pagesBySeqNum;
   std::vector<std::pair<ImgType, librevenge::RVNGBinaryData> > m_images;
   std::vector<BorderArtInfo> m_borderImages;
+  std::map<unsigned, EmbeddedObject> m_OLEs;
   std::vector<ColorReference> m_textColors;
   std::vector<std::vector<unsigned char> > m_fonts;
   std::vector<CharacterStyle> m_defaultCharStyles;

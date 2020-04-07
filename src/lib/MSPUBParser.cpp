@@ -301,13 +301,7 @@ bool MSPUBParser::parseEscherDelay(librevenge::RVNGInputStream *input)
       librevenge::RVNGBinaryData img;
       unsigned long toRead = info.contentsLength;
       input->seek(input->tell() + getStartOffset(imgType, info.initial), librevenge::RVNG_SEEK_SET);
-      while (toRead > 0 && stillReading(input, (unsigned long)-1))
-      {
-        unsigned long howManyRead = 0;
-        const unsigned char *buf = input->read(toRead, howManyRead);
-        img.append(buf, howManyRead);
-        toRead -= howManyRead;
-      }
+      readData(input, toRead, img);
       if (imgType == WMF || imgType == EMF)
       {
         img = inflateData(img);
@@ -564,14 +558,7 @@ bool MSPUBParser::parseFontChunk(
             // TODO: Why do we not read the data as part of the block info?
             input->seek(eotOffset.get() + 4, librevenge::RVNG_SEEK_SET);
             librevenge::RVNGBinaryData data;
-            unsigned long toRead = eotLength;
-            while (toRead > 0 && stillReading(input, (unsigned long)-1))
-            {
-              unsigned long howManyRead = 0;
-              const unsigned char *buf = input->read(toRead, howManyRead);
-              data.append(buf, howManyRead);
-              toRead -= howManyRead;
-            }
+            readData(input, eotLength, data);
             m_collector->addEOTFont(name.get(), data);
             input->seek(subInfo.dataOffset + subInfo.dataLength, librevenge::RVNG_SEEK_SET);
           }
@@ -612,14 +599,7 @@ bool MSPUBParser::parseBorderArtChunk(
                 {
                   librevenge::RVNGBinaryData &img = *(m_collector->addBorderImage(
                                                         WMF, i));
-                  unsigned long toRead = imgRecord.dataLength;
-                  while (toRead > 0 && stillReading(input, (unsigned long)-1))
-                  {
-                    unsigned long howManyRead = 0;
-                    const unsigned char *buf = input->read(toRead, howManyRead);
-                    img.append(buf, howManyRead);
-                    toRead -= howManyRead;
-                  }
+                  readData(input, imgRecord.dataLength, img);
                 }
               }
             }

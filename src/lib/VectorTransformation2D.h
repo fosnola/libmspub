@@ -28,16 +28,20 @@ class VectorTransformation2D
   double m_x, m_y;
 public:
   VectorTransformation2D();
+  VectorTransformation2D(double m11, double m12, double m21, double m22, double x, double y);
   Vector2D transform(Vector2D original) const;
   Vector2D transformWithOrigin(Vector2D v, Vector2D origin) const;
   double getRotation() const;
   double getHorizontalScaling() const;
   double getVerticalScaling() const;
   bool orientationReversing() const;
+  //! return true is the transformation is composed of a scaling (with no axis inversion) and a translation
+  bool isSimple() const;
   friend VectorTransformation2D operator*(const VectorTransformation2D &l, const VectorTransformation2D &r);
   static VectorTransformation2D fromFlips(bool flipH, bool flipV);
   static VectorTransformation2D fromTranslate(double x, double y);
   static VectorTransformation2D fromCounterRadians(double theta);
+  static VectorTransformation2D fromScaling(double x, double y);
 };
 VectorTransformation2D operator*(const VectorTransformation2D &l, const VectorTransformation2D &r);
 } // namespace libmspub
