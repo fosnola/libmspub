@@ -68,8 +68,9 @@ private:
   std::vector<unsigned> m_imageDataChunkIndices;
   std::vector<unsigned> m_oleDataChunkIndices;
   std::vector<unsigned> m_quillColorEntries;
+  std::map<unsigned, unsigned> m_fileIdToChunkId;
   std::map<unsigned, std::vector<unsigned> > m_chunkChildIndicesById;
-  std::deque<unsigned> m_chunksBeingRead;
+  std::set<unsigned> m_shapesAlreadySend;
 
 protected:
   unsigned m_version;
@@ -93,6 +94,7 @@ protected:
   bool parseContents(librevenge::RVNGInputStream *input) override;
   bool parseDocument(librevenge::RVNGInputStream *input);
   bool parseFonts(librevenge::RVNGInputStream *input);
+  bool parsePage(librevenge::RVNGInputStream *input, unsigned seqNum);
   unsigned getColorIndexByQuillEntry(unsigned entry) override;
   int translateCoordinateIfNecessary(int coordinate) const;
   virtual unsigned getFirstLineOffset() const;

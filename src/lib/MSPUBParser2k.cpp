@@ -26,29 +26,6 @@
 namespace libmspub
 {
 
-namespace
-{
-
-class ChunkNestingGuard
-{
-public:
-  ChunkNestingGuard(std::deque<unsigned> &chunks, const unsigned seqNum)
-    : m_chunks(chunks)
-  {
-    m_chunks.push_front(seqNum);
-  }
-
-  ~ChunkNestingGuard()
-  {
-    m_chunks.pop_front();
-  }
-
-private:
-  std::deque<unsigned> &m_chunks;
-};
-
-}
-
 struct ListHeader2k
 {
   ListHeader2k()
@@ -79,8 +56,9 @@ MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector 
   , m_imageDataChunkIndices()
   , m_oleDataChunkIndices()
   , m_quillColorEntries()
+  , m_fileIdToChunkId()
   , m_chunkChildIndicesById()
-  , m_chunksBeingRead()
+  , m_shapesAlreadySend()
   , m_version(4) // assume publisher 97 as the presence of Quill implies 98 or 2000
   , m_isBanner(false)
 {
@@ -420,46 +398,48 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
     unsigned short typeMarker = readU16(input);
     input->seek(offset, librevenge::RVNG_SEEK_SET);
-    m_chunkChildIndicesById[parent].push_back(unsigned(m_contentChunks.size()));
+    unsigned const chunkId=unsigned(m_contentChunks.size());
+    m_chunkChildIndicesById[parent].push_back(chunkId);
+    m_fileIdToChunkId[id]=chunkId;
     switch (typeMarker)
     {
     case 0x0014:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found page chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(PAGE, chunkOffset, 0, id, parent));
-      m_pageChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_pageChunkIndices.push_back(chunkId);
       break;
     case 0x0015:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found document chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(DOCUMENT, chunkOffset, 0, id, parent));
-      m_documentChunkIndex = unsigned(m_contentChunks.size() - 1);
+      m_documentChunkIndex = chunkId;
       break;
     case 0x001e:
       m_contentChunks.push_back(ContentChunkReference(FONT, chunkOffset, 0, id, parent));
-      m_fontChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_fontChunkIndices.push_back(chunkId);
       break;
     case 0x0001:
       m_contentChunks.push_back(ContentChunkReference(TABLE, chunkOffset, 0, id, parent));
-      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0002:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found image_2k chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K, chunkOffset, 0, id, parent));
-      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0003:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found ole chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(OLE_2K, chunkOffset, 0, id, parent));
-      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0021:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found image_2k_data chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(IMAGE_2K_DATA, chunkOffset, 0, id, parent));
-      m_imageDataChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_imageDataChunkIndices.push_back(chunkId);
       break;
     case 0x0022:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found ole_2k_data chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(OLE_2K_DATA, chunkOffset, 0, id, parent));
-      m_oleDataChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_oleDataChunkIndices.push_back(chunkId);
       break;
     case 0x0000:
     case 0x0004:
@@ -469,34 +449,34 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     case 0x0008:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found shape chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(SHAPE, chunkOffset, 0, id, parent));
-      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0047:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found palette chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(PALETTE, chunkOffset, 0, id, parent));
-      m_paletteChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_paletteChunkIndices.push_back(chunkId);
       break;
     case 0x001F:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found borderArt chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(BORDER_ART, chunkOffset, 0, id, parent));
-      m_borderArtChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_borderArtChunkIndices.push_back(chunkId);
       break;
     case 0x000E:
     case 0x000F:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found group chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(GROUP, chunkOffset, 0, id, parent));
-      m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_shapeChunkIndices.push_back(chunkId);
       break;
     case 0x0027:
       // TODO: read the child image and add it to the master's background...
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found special paper chunk 0x%x, ignored\n", id));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
-      m_unknownChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_unknownChunkIndices.push_back(chunkId);
       break;
     default:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found unknown chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
-      m_unknownChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      m_unknownChunkIndices.push_back(chunkId);
       break;
     }
   }
@@ -592,7 +572,10 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
 
   for (unsigned int shapeChunkIndex : m_shapeChunkIndices)
   {
-    parse2kShapeChunk(m_contentChunks.at(shapeChunkIndex), input);
+    auto const &chunk=m_contentChunks.at(shapeChunkIndex);
+    if (m_shapesAlreadySend.find(chunk.seqNum)!=m_shapesAlreadySend.end())
+      continue;
+    parse2kShapeChunk(chunk, input);
   }
 
   return true;
@@ -640,10 +623,12 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
         {
           m_collector->addPage(masterId);
           m_collector->designateMasterPage(masterId);
+          parsePage(input, masterId);
           for (auto p : pages)
           {
             m_collector->setNextPage(p);
             m_collector->setMasterPage(p, masterId);
+            parsePage(input, p);
           }
         }
       }
@@ -657,6 +642,43 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
   return false;
 }
 
+bool MSPUBParser2k::parsePage(librevenge::RVNGInputStream *input, unsigned seqNum)
+{
+  auto it=m_fileIdToChunkId.find(seqNum);
+  if (it==m_fileIdToChunkId.end())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not find the page %x\n", seqNum));
+    return false;
+  }
+  auto const &chunk=m_contentChunks.at(it->second);
+  ChunkHeader2k header;
+  parseChunkHeader(chunk,input,header);
+  if (!header.hasData())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not find the page list %x\n", seqNum));
+    return false;
+  }
+  input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+  ListHeader2k listHeader;
+  if (!parseListHeader(input, chunk.end, listHeader, false) || listHeader.m_dataSize!=2)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not read the page list %x\n", seqNum));
+    return false;
+  }
+  for (int shapeId=0; shapeId<listHeader.m_N; ++shapeId)
+  {
+    unsigned cId=readU16(input);
+    auto cIt=m_fileIdToChunkId.find(cId);
+    if (cIt==m_fileIdToChunkId.end())
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not find child=%x in the page %x\n", cId, seqNum));
+      continue;
+    }
+    const ContentChunkReference &childChunk = m_contentChunks.at(cIt->second);
+    parse2kShapeChunk(childChunk, input, seqNum, false);
+  }
+  return true;
+}
 bool MSPUBParser2k::parseFonts(librevenge::RVNGInputStream *input)
 {
   if (m_version>=5) return true; // TODO: ptr size=4, font name in utf16
@@ -879,12 +901,12 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
 bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
                                       boost::optional<unsigned> pageSeqNum, bool topLevelCall)
 {
-  if (find(m_chunksBeingRead.begin(), m_chunksBeingRead.end(), chunk.seqNum) != m_chunksBeingRead.end())
+  if (m_shapesAlreadySend.find(chunk.seqNum)!=m_shapesAlreadySend.end())
   {
-    MSPUB_DEBUG_MSG(("MSPUBParser2k::parse2kShapeChunk: chunk %u is nested in itself\n", chunk.seqNum));
+    MSPUB_DEBUG_MSG(("MSPUBParser2k::parse2kShapeChunk: chunk %u is already parsed\n", chunk.seqNum));
     return false;
   }
-  const ChunkNestingGuard guard(m_chunksBeingRead, chunk.seqNum);
+  m_shapesAlreadySend.insert(chunk.seqNum);
 
   unsigned page = pageSeqNum.get_value_or(chunk.parentSeqNum);
   input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
@@ -993,14 +1015,55 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
   bool retVal = true;
   m_collector->beginGroup();
   m_collector->setCurrentGroupSeqNum(seqNum);
-  const std::map<unsigned, std::vector<unsigned> >::const_iterator it = m_chunkChildIndicesById.find(seqNum);
-  if (it != m_chunkChildIndicesById.end())
+  if (m_version<=3)
   {
-    const std::vector<unsigned> &chunkChildIndices = it->second;
-    for (unsigned int chunkChildIndex : chunkChildIndices)
+    auto it=m_fileIdToChunkId.find(seqNum);
+    if (it==m_fileIdToChunkId.end())
     {
-      const ContentChunkReference &childChunk = m_contentChunks.at(chunkChildIndex);
-      retVal = retVal && parse2kShapeChunk(childChunk, input, page, false);
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not find the group %x\n", seqNum));
+      return false;
+    }
+    auto const &chunk=m_contentChunks.at(it->second);
+    ChunkHeader2k header;
+    parseChunkHeader(chunk,input,header);
+    if (!header.hasData())
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not find the group list %x\n", seqNum));
+      return false;
+    }
+    input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
+    ListHeader2k listHeader;
+    if (!parseListHeader(input, chunk.end, listHeader, false) || listHeader.m_dataSize!=2)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not read the group list %x\n", seqNum));
+      return false;
+    }
+    std::vector<unsigned> shapesList;
+    shapesList.reserve(size_t(listHeader.m_N));
+    for (int shapeId=0; shapeId<listHeader.m_N; ++shapeId) shapesList.push_back(readU16(input));
+    for (auto cId : shapesList)
+    {
+      auto cIt=m_fileIdToChunkId.find(cId);
+      if (cIt==m_fileIdToChunkId.end())
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not find child=%x in the group %x\n", cId, seqNum));
+        continue;
+      }
+      const ContentChunkReference &childChunk = m_contentChunks.at(cIt->second);
+      parse2kShapeChunk(childChunk, input, page, false);
+    }
+  }
+  else
+  {
+    const std::map<unsigned, std::vector<unsigned> >::const_iterator it = m_chunkChildIndicesById.find(seqNum);
+    if (it != m_chunkChildIndicesById.end())
+    {
+      const std::vector<unsigned> &chunkChildIndices = it->second;
+      for (unsigned int chunkChildIndex : chunkChildIndices)
+      {
+        const ContentChunkReference &childChunk = m_contentChunks.at(chunkChildIndex);
+        retVal = retVal && parse2kShapeChunk(childChunk, input, page, false);
+      }
     }
   }
   m_collector->endGroup();
