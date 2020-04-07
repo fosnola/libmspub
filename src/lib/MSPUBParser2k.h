@@ -67,6 +67,7 @@ public:
 private:
   std::vector<unsigned> m_imageDataChunkIndices;
   std::vector<unsigned> m_oleDataChunkIndices;
+  boost::optional<unsigned> m_specialPaperChunkIndex;
   std::vector<unsigned> m_quillColorEntries;
   std::map<unsigned, unsigned> m_fileIdToChunkId;
   std::map<unsigned, std::vector<unsigned> > m_chunkChildIndicesById;

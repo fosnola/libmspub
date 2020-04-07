@@ -56,6 +56,7 @@ MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector 
   : MSPUBParser(input, collector)
   , m_imageDataChunkIndices()
   , m_oleDataChunkIndices()
+  , m_specialPaperChunkIndex()
   , m_quillColorEntries()
   , m_fileIdToChunkId()
   , m_chunkChildIndicesById()
@@ -474,7 +475,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       // TODO: read the child image and add it to the master's background...
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found special paper chunk 0x%x, ignored\n", id));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
-      m_unknownChunkIndices.push_back(chunkId);
+      m_specialPaperChunkIndex=id;
       break;
     default:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found unknown chunk of id 0x%x and parent 0x%x\n", id, parent));
@@ -526,7 +527,6 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     }
   }
   parseBorderArts(input);
-
   for (unsigned int imageDataChunkIndex : m_imageDataChunkIndices)
   {
     const ContentChunkReference &chunk = m_contentChunks.at(imageDataChunkIndex);
@@ -535,7 +535,14 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     librevenge::RVNGBinaryData img;
     readData(input, toRead, img);
     m_collector->addImage(++m_lastAddedImage, WMF, img);
-    m_collector->setShapeImgIndex(chunk.parentSeqNum, m_lastAddedImage);
+    if (m_specialPaperChunkIndex && chunk.parentSeqNum==*m_specialPaperChunkIndex)
+    {
+      m_collector->setShapeFill(chunk.parentSeqNum,
+                                std::make_shared<ImgFill>(m_lastAddedImage, m_collector, false, 0),
+                                true);
+    }
+    else
+      m_collector->setShapeImgIndex(chunk.parentSeqNum, m_lastAddedImage);
   }
   std::set<unsigned> oleIds;
   for (unsigned int oleDataChunkIndex : m_oleDataChunkIndices)
@@ -621,6 +628,8 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
         {
           m_collector->addPage(masterId);
           m_collector->designateMasterPage(masterId);
+          if (m_specialPaperChunkIndex)
+            m_collector->setPageBgShape(masterId, *m_specialPaperChunkIndex);
           parsePage(input, masterId);
           for (size_t i=2; i<pages.size(); ++i)
           {
