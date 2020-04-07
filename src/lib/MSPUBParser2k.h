@@ -103,7 +103,7 @@ protected:
   static ColorReference getColorReferenceBy2kIndex(unsigned char index);
   static Color getColorBy2kIndex(unsigned char index);
   static Color getColorBy2kHex(unsigned hex);
-  static unsigned translate2kColorReference(unsigned ref2k);
+  unsigned translate2kColorReference(unsigned ref2k) const;
   static PageType getPageTypeBySeqNum(unsigned seqNum);
   virtual void parseContentsTextIfNecessary(librevenge::RVNGInputStream *input);
   bool parseListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header, bool readPosition);

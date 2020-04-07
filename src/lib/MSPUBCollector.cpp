@@ -786,58 +786,60 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
       auto const &obj=m_OLEs.find(*info.m_OLEIndex)->second;
       obj.addTo(list);
       m_painter->drawGraphicObject(list);
-      return &no_op;
     }
-    if (bool(info.m_pictureRecolor))
+    else
     {
-      Color obc = info.m_pictureRecolor.get().getFinalColor(m_paletteColors);
-      graphicsProps.insert("draw:color-mode", "greyscale");
-      graphicsProps.insert("draw:red",
-                           static_cast<double>(obc.r) / 255.0, librevenge::RVNG_PERCENT);
-      graphicsProps.insert("draw:blue",
-                           static_cast<double>(obc.b) / 255.0, librevenge::RVNG_PERCENT);
-      graphicsProps.insert("draw:green",
-                           static_cast<double>(obc.g) / 255.0, librevenge::RVNG_PERCENT);
-    }
-    if (bool(info.m_pictureBrightness))
-      graphicsProps.insert("draw:luminance", static_cast<double>(info.m_pictureBrightness.get() + 32768.0) / 65536.0, librevenge::RVNG_PERCENT);
-    bool shadowPropsInserted = false;
-    if (bool(info.m_shadow))
-    {
-      const Shadow &s = info.m_shadow.get();
-      if (!needsEmulation(s))
+      if (bool(info.m_pictureRecolor))
       {
-        shadowPropsInserted = true;
-        graphicsProps.insert("draw:shadow", "visible");
-        graphicsProps.insert("draw:shadow-offset-x", static_cast<double>(s.m_offsetXInEmu) / EMUS_IN_INCH);
-        graphicsProps.insert("draw:shadow-offset-y", static_cast<double>(s.m_offsetYInEmu) / EMUS_IN_INCH);
-        graphicsProps.insert("draw:shadow-color", getColorString(s.m_color.getFinalColor(m_paletteColors)));
-        graphicsProps.insert("draw:shadow-opacity", s.m_opacity, librevenge::RVNG_PERCENT);
+        Color obc = info.m_pictureRecolor.get().getFinalColor(m_paletteColors);
+        graphicsProps.insert("draw:color-mode", "greyscale");
+        graphicsProps.insert("draw:red",
+                             static_cast<double>(obc.r) / 255.0, librevenge::RVNG_PERCENT);
+        graphicsProps.insert("draw:blue",
+                             static_cast<double>(obc.b) / 255.0, librevenge::RVNG_PERCENT);
+        graphicsProps.insert("draw:green",
+                             static_cast<double>(obc.g) / 255.0, librevenge::RVNG_PERCENT);
       }
-      // TODO: Emulate shadows that don't conform
-      // to LibreOffice's range of possible shadows.
-    }
-    m_painter->setStyle(graphicsProps);
+      if (bool(info.m_pictureBrightness))
+        graphicsProps.insert("draw:luminance", static_cast<double>(info.m_pictureBrightness.get() + 32768.0) / 65536.0, librevenge::RVNG_PERCENT);
+      bool shadowPropsInserted = false;
+      if (bool(info.m_shadow))
+      {
+        const Shadow &s = info.m_shadow.get();
+        if (!needsEmulation(s))
+        {
+          shadowPropsInserted = true;
+          graphicsProps.insert("draw:shadow", "visible");
+          graphicsProps.insert("draw:shadow-offset-x", static_cast<double>(s.m_offsetXInEmu) / EMUS_IN_INCH);
+          graphicsProps.insert("draw:shadow-offset-y", static_cast<double>(s.m_offsetYInEmu) / EMUS_IN_INCH);
+          graphicsProps.insert("draw:shadow-color", getColorString(s.m_color.getFinalColor(m_paletteColors)));
+          graphicsProps.insert("draw:shadow-opacity", s.m_opacity, librevenge::RVNG_PERCENT);
+        }
+        // TODO: Emulate shadows that don't conform
+        // to LibreOffice's range of possible shadows.
+      }
+      m_painter->setStyle(graphicsProps);
 
-    writeCustomShape(type, graphicsProps, m_painter, x, y, height, width,
-                     true, foldedTransform,
-                     std::vector<Line>(), std::bind(&MSPUBCollector::getCalculationValue, this, info, _1, false, adjustValues), m_paletteColors, info.getCustomShape());
-    if (bool(info.m_pictureRecolor))
-    {
-      graphicsProps.remove("draw:color-mode");
-      graphicsProps.remove("draw:red");
-      graphicsProps.remove("draw:blue");
-      graphicsProps.remove("draw:green");
-    }
-    if (bool(info.m_pictureBrightness))
-      graphicsProps.remove("draw:luminance");
-    if (shadowPropsInserted)
-    {
-      graphicsProps.remove("draw:shadow");
-      graphicsProps.remove("draw:shadow-offset-x");
-      graphicsProps.remove("draw:shadow-offset-y");
-      graphicsProps.remove("draw:shadow-color");
-      graphicsProps.remove("draw:shadow-opacity");
+      writeCustomShape(type, graphicsProps, m_painter, x, y, height, width,
+                       true, foldedTransform,
+                       std::vector<Line>(), std::bind(&MSPUBCollector::getCalculationValue, this, info, _1, false, adjustValues), m_paletteColors, info.getCustomShape());
+      if (bool(info.m_pictureRecolor))
+      {
+        graphicsProps.remove("draw:color-mode");
+        graphicsProps.remove("draw:red");
+        graphicsProps.remove("draw:blue");
+        graphicsProps.remove("draw:green");
+      }
+      if (bool(info.m_pictureBrightness))
+        graphicsProps.remove("draw:luminance");
+      if (shadowPropsInserted)
+      {
+        graphicsProps.remove("draw:shadow");
+        graphicsProps.remove("draw:shadow-offset-x");
+        graphicsProps.remove("draw:shadow-offset-y");
+        graphicsProps.remove("draw:shadow-color");
+        graphicsProps.remove("draw:shadow-opacity");
+      }
     }
   }
   if (bool(info.m_beginArrow)) info.m_beginArrow->addTo(graphicsProps, true);

@@ -81,7 +81,7 @@ MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector 
   , m_quillColorEntries()
   , m_chunkChildIndicesById()
   , m_chunksBeingRead()
-  , m_version(3)
+  , m_version(4) // assume publisher 97 as the presence of Quill implies 98 or 2000
   , m_isBanner(false)
 {
 }
@@ -263,8 +263,30 @@ Color MSPUBParser2k::getColorBy2kIndex(unsigned char index)
 }
 
 // takes a color reference in 2k format and translates it into 2k2 format that collector understands.
-unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k)
+unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k) const
 {
+  if (m_version==3 && (ref2k>>24)==0x81)
+  {
+    // v3: find
+    //    + 00 00 00 id
+    //    + 20 RR GG BB
+    //    + 81 DD 00 id with DD=80: color, DD=81-ff mixed color and white, DD=00-7f mixed color and black
+    Color c = getColorBy2kHex(ref2k&0xffff);
+    double delta=double((ref2k>>16)&0xff)/128-1;
+    double defColor=delta*255;
+    if (delta<0)
+    {
+      delta*=-1;
+      defColor=0;
+    }
+    unsigned rgb[]=
+    {
+      unsigned((1-delta)*double(c.r)+defColor),
+      unsigned((1-delta)*double(c.g)+defColor),
+      unsigned((1-delta)*double(c.b)+defColor)
+    };
+    return unsigned((rgb[0]) | (rgb[1] << 8) | (rgb[2] << 16));
+  }
   switch ((ref2k >> 24) & 0xFF)
   {
   case 0xC0: //index into user palette
@@ -586,10 +608,11 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
         std::vector<unsigned> pages;
         for (int pg=2; pg<listHeader.m_N; ++pg)
         {
+          if (m_version==3 && pg+1==listHeader.m_N) break; // what is the last page?
           pages.push_back(readU16(input));
           m_collector->addPage(pages.back());
         }
-        if (m_version<=2)
+        if (m_version<=3)
         {
           m_collector->addPage(masterId);
           m_collector->designateMasterPage(masterId);
@@ -838,7 +861,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
 
   unsigned page = pageSeqNum.get_value_or(chunk.parentSeqNum);
   input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
-  if (topLevelCall && m_version>2)
+  if (topLevelCall && m_version>3)
   {
     // ignore non top level shapes
     int i_page = -1;

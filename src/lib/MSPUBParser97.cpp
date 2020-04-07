@@ -56,8 +56,25 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   input->seek(blockStart+4, librevenge::RVNG_SEEK_SET);
   unsigned version=readU16(input);
   if (version>=200 && version<300) m_version=2; // mspub 2
-  // fixme: find also a method to differentiate mspub 3 and 97
-  if (m_version<=2)
+  else if (version>=300)
+  {
+    // let read the content major sub version
+    input->seek(7, librevenge::RVNG_SEEK_SET);
+    unsigned subVersion=readU8(input);
+    if (subVersion==0 || subVersion==1)
+      m_version=3+subVersion;
+    else   // ok assume 97
+    {
+      m_version=4;
+      MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: oops find unknown sub version=%d, assume 97\n", int(subVersion)));
+    }
+  }
+  else   // assume mspub 2
+  {
+    m_version=2;
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: oops find version=%d, assume v2\n", int(version)));
+  }
+  if (m_version<=3)
   {
     // set the default parameter
     CharacterStyle defaultCharStyle;
@@ -76,7 +93,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     parseSpanStyles(input, id, spanStyles, posToSpanMap);
   std::vector<ParagraphStyle> paraStyles;
   std::map<unsigned, unsigned> posToParaMap;
-  if (m_version<=2)
+  if (m_version<=3)
   {
     for (unsigned id=index[1]; id<index[2]; ++id)
       parseParagraphStyles(input, id, paraStyles, posToParaMap);
@@ -465,37 +482,39 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
     int baseLine=readS8(input);
     style.superSubType = baseLine<0 ? SUBSCRIPT : baseLine>0 ? SUPERSCRIPT : NO_SUPER_SUB;
   }
-  if (m_version<=2)
+  if (length >= 8)
   {
-    if (length >= 8)
+    if (m_version<3)
       style.colorIndex = int(getColorIndexByQuillEntry(readU8(input)));
-    if (length >= 9)
-    {
-      unsigned fl=length>=10 ? readU16(input) : readU8(input);
-      switch (fl&3)
-      {
-      case 0: // none
-      default:
-        break;
-      case 1:
-      case 2:
-        style.underline = Underline::Single;
-        break;
-      case 3:
-        style.underline = Underline::Double;
-        break;
-      }
-      auto spacing=(fl>>2)&0x1fff;
-      if (spacing&0x1000)
-        style.letterSpacingInPt=(double(spacing)-0x2000)/8;
-      else if (spacing)
-        style.letterSpacingInPt=double(spacing)/8;
-    }
+    else // color is no longer stored here
+      input->seek(1, librevenge::RVNG_SEEK_CUR);
   }
-  else if (length >= 16)
+  if (m_version<=3 && length >= 9)
+  {
+    unsigned fl=length>=10 ? readU16(input) : readU8(input);
+    switch (fl&3)
+    {
+    case 0: // none
+    default:
+      break;
+    case 1:
+    case 2:
+      style.underline = Underline::Single;
+      break;
+    case 3:
+      style.underline = Underline::Double;
+      break;
+    }
+    auto spacing=(fl>>2)&0x1fff;
+    if (spacing&0x1000)
+      style.letterSpacingInPt=(double(spacing)-0x2000)/8;
+    else if (spacing)
+      style.letterSpacingInPt=double(spacing)/8;
+  }
+  if (m_version>=3 && length >= 12)
   {
     input->seek(begin + 0xC, librevenge::RVNG_SEEK_SET);
-    style.colorIndex = int(getColorIndexByQuillEntry(readU32(input)));
+    style.colorIndex = int(getColorIndexByQuillEntry(length<14 ? readU8(input) : length<16 ? readU16(input) : readU32(input)));
   }
   style.textSizeInPt = 10 +
                        static_cast<double>(textSizeVariationFromDefault) / 2;
@@ -548,7 +567,8 @@ unsigned MSPUBParser97::getShapeFillColorOffset() const
 void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                      ChunkHeader2k const &header)
 {
-  if (m_version>2)
+  //if (m_version>2 && (m_version!=3 || (header.m_type==C_Line||header.m_type==C_Table || header.m_type==C_Text)))
+  if (m_version>2 && (m_version!=3 || header.m_type==C_Table))
     return MSPUBParser2k::parseShapeFormat(input, seqNum, header);
 
   if (header.m_type==C_Group)
@@ -559,15 +579,25 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     return;
   }
   input->seek(2, librevenge::RVNG_SEEK_CUR); // flags: 40=selected, 1=shadow
-  unsigned char colors[2];
-  for (auto &c : colors) c=readU8(input);
+  unsigned colors[2];
+  for (auto &c : colors) c=m_version<=2 ? readU8(input) : readU32(input);
   int patternId=int(readU8(input));
+  if (m_version>=3) input->seek(1, librevenge::RVNG_SEEK_CUR);
   int numBorders=1;
-  int bColors[4];
+  unsigned bColors[4];
   double widths[4];
-  bColors[0]=int(readU8(input));
-  auto w=readU8(input);
-  widths[0]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+  if (m_version<=2)
+  {
+    bColors[0]=readU8(input);
+    auto w=readU8(input);
+    widths[0]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+  }
+  else
+  {
+    auto w=readU8(input);
+    widths[0]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+    bColors[0]=readU32(input);
+  }
   input->seek(2,librevenge::RVNG_SEEK_CUR); // 0
   int borderId=0xfffe; // none
   if (header.isRectangle())
@@ -575,11 +605,24 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
     borderId=int(readU16(input));
     input->seek(1,librevenge::RVNG_SEEK_CUR); // a width
     numBorders=4;
-    for (int j=1; j<4; ++j)
+    if (m_version<=2)
     {
-      bColors[j]=int(readU8(input));
-      w=readU8(input);
-      widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+      for (int j=1; j<4; ++j)
+      {
+        bColors[j]=readU8(input);
+        auto w=readU8(input);
+        widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+      }
+    }
+    else
+    {
+      for (int j=1; j<4; ++j)
+      {
+        input->seek(1,librevenge::RVNG_SEEK_CUR);
+        auto w=readU8(input);
+        widths[j]=(w&0x80) ? double(w&0x7f)/4 : double(w);
+        bColors[j]=readU32(input);
+      }
     }
     if (header.m_type == C_Text)
     {
@@ -622,19 +665,17 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   {
     ShapeType shapeType = getShapeType((unsigned char)readU16(input));
     if (shapeType != UNKNOWN_SHAPE)
-    {
       m_collector->setShapeType(seqNum, shapeType);
-      /*
-      for (int i=0; i<4; ++i)
-        m_collector->setAdjustValue(seqNum, i, readS16(input));
-      */
-    }
     auto flags=readU16(input);
     if (flags&3)
       m_collector->setShapeFlip(seqNum, flags&1, flags&2);
     int rot=(flags>>2)&3;
     if (rot)
       m_collector->setShapeRotation(seqNum,360-90*rot);
+    /*
+      for (int i=0; i<4; ++i)
+      m_collector->setAdjustValue(seqNum, i, readS16(input));
+    */
   }
   else if (header.m_type==C_Line)
   {
@@ -697,38 +738,54 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
   }
   if (borderId>=0x8000)
   {
-    for (int i=0; i<numBorders; ++i)
+    if (m_version<=2)
     {
-      int wh=i==0 ? numBorders-1 : i-1;
-      Color lineColor=getColorBy2kIndex(bColors[wh]&0xf);
-      double delta=double((bColors[wh]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
+      for (int i=0; i<numBorders; ++i)
+      {
+        int wh=i==0 ? numBorders-1 : i-1;
+        Color lineColor=getColorBy2kIndex(bColors[wh]&0xf);
+        double delta=double((bColors[wh]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
+        unsigned rgb[]=
+        {
+          unsigned((1-delta)*double(lineColor.r)+delta*255),
+          unsigned((1-delta)*double(lineColor.g)+delta*255),
+          unsigned((1-delta)*double(lineColor.b)+delta*255)
+        };
+        m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[wh]*12700), widths[wh]>0));
+      }
+    }
+    else
+    {
+      for (int i=0; i<numBorders; ++i)
+      {
+        int wh=i==0 ? numBorders-1 : i-1;
+        m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[wh])), unsigned(widths[wh]*12700), widths[wh]>0));
+      }
+    }
+  }
+  else if (widths[0]>0)
+  {
+    if (m_version<=2)
+    {
+      Color lineColor=getColorBy2kIndex(bColors[0]&0xf);
+      double delta=double((bColors[0]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
       unsigned rgb[]=
       {
         unsigned((1-delta)*double(lineColor.r)+delta*255),
         unsigned((1-delta)*double(lineColor.g)+delta*255),
         unsigned((1-delta)*double(lineColor.b)+delta*255)
       };
-      m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[wh]*12700), widths[wh]>0));
+      m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[0]*12700), true));
     }
-  }
-  else if (widths[0]>0)
-  {
-    Color lineColor=getColorBy2kIndex(bColors[0]&0xf);
-    double delta=double((bColors[0]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
-    unsigned rgb[]=
-    {
-      unsigned((1-delta)*double(lineColor.r)+delta*255),
-      unsigned((1-delta)*double(lineColor.g)+delta*255),
-      unsigned((1-delta)*double(lineColor.b)+delta*255)
-    };
-    m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), unsigned(widths[0]*12700), true));
+    else
+      m_collector->addShapeLine(seqNum, Line(ColorReference(translate2kColorReference(bColors[0])), unsigned(widths[0]*12700), true));
     m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
     m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
   }
   if (patternId)
   {
     if (patternId==1 || patternId==2)
-      m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(getColorReferenceBy2kIndex(colors[2-patternId]), 1, m_collector), false);
+      m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(ColorReference(translate2kColorReference(colors[2-patternId])), 1, m_collector), false);
     else if (patternId>=3 && patternId<=24)
     {
       uint8_t const patterns[]=
@@ -757,7 +814,9 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       };
 
       m_collector->setShapeFill(seqNum, std::make_shared<Pattern88Fill>
-                                (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),getColorReferenceBy2kIndex(colors[1]), getColorReferenceBy2kIndex(colors[0])), false);
+                                (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),
+                                 ColorReference(translate2kColorReference(colors[1])),
+                                 ColorReference(translate2kColorReference(colors[0]))), false);
     }
     else
     {
