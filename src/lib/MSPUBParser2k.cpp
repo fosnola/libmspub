@@ -267,6 +267,10 @@ unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k) const
 {
   if (m_version==2)
   {
+    if (ref2k&0x90)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::translate2kColorReference: find unknown color flag=%x\n", ref2k));
+    }
     Color c = getColorBy2kHex(ref2k&0xf);
     double delta=double((ref2k>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
     unsigned rgb[]=

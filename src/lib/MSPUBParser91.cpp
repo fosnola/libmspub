@@ -367,7 +367,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
               spanChars.clear();
             }
             TextSpan pageSpan(spanChars,charStyle);
-            pageSpan.isPageField=true;
+            pageSpan.field=Field(Field::PageNumber);
             paraSpans.push_back(pageSpan);
           }
           else

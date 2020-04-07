@@ -170,11 +170,43 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
       }
       if (specialIt->second==FieldBegin)   // # 05
       {
-        TextSpan pageSpan(spanChars,charStyle);
-        pageSpan.isPageField=true;
-        paraSpans.push_back(pageSpan);
-        input->seek(1, librevenge::RVNG_SEEK_CUR);
-        ++c;
+        if (m_version==2)
+        {
+          input->seek(1, librevenge::RVNG_SEEK_CUR);
+          ++c;
+          ch=readU8(input);
+        }
+        if (ch==0x5)
+        {
+          TextSpan pageSpan(spanChars,charStyle);
+          pageSpan.field=Field(Field::PageNumber);
+          paraSpans.push_back(pageSpan);
+        }
+        else if (ch==0x6 && charStyle.fieldId)
+        {
+          char const *(dtFormat[])=
+          {
+            "%m/%d/%y", "%A, %B %d, %Y", "%d/%m/%y", "%A, %B %d, %Y",
+            "%d %B, %Y", "%B %d, %Y", "%d-%b-%y", "%B, %y", "%b-%y",
+            "%m/%d/%y %I:%M %p", "%m/%d/%y %I:%M:%S %p",
+            "%I:%M %p", "%I:%M:%S %p", "%I:%M", "%I:%M:%S", "%H:%M", "%H:%M:%S",
+          };
+          if (*charStyle.fieldId>=1 && *charStyle.fieldId<=MSPUB_N_ELEMENTS(dtFormat))
+          {
+            TextSpan dtSpan(spanChars,charStyle);
+            dtSpan.field=Field(*charStyle.fieldId<12 ? Field::Date : Field::Time);
+            dtSpan.field->m_DTFormat=dtFormat[*charStyle.fieldId-1];
+            paraSpans.push_back(dtSpan);
+          }
+          else
+          {
+            MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: unknown a date field=%d\n",*charStyle.fieldId));
+          }
+        }
+        else
+        {
+          MSPUB_DEBUG_MSG(("MSPUBParser97::parseContentsTextIfNecessary: field %x is not implemented\n",unsigned(ch)));
+        }
         continue;
       }
       if (!paraSpans.empty())   // end of line or shape
@@ -511,6 +543,8 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
     else if (spacing)
       style.letterSpacingInPt=double(spacing)/8;
   }
+  if (m_version>=3 && length >= 11)
+    style.fieldId=readU8(input);
   if (m_version>=3 && length >= 12)
   {
     input->seek(begin + 0xC, librevenge::RVNG_SEEK_SET);
@@ -537,8 +571,15 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
       posToType[pos]=ShapeEnd;
     else if (ch == 0xF)
       posToType[pos]=CellEnd;
-    else if (last=='#' && ch==0x5)
-      posToType[pos-1]=FieldBegin;
+    else if (ch==0x5)
+    {
+      if (m_version==2 && last=='#')
+        posToType[pos-1]=FieldBegin;
+      else if (m_version>=3)
+        posToType[pos]=FieldBegin;
+    }
+    else if (ch==0x6 && m_version>=3)
+      posToType[pos]=FieldBegin;
     last = ch;
     ++pos;
   }

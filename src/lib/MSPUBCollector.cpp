@@ -976,11 +976,11 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
                 {
                   librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
                   m_painter->openSpan(charProps);
-                  if (text[para].spans[i_spans].isPageField)
+                  if (text[para].spans[i_spans].field)
                   {
                     librevenge::RVNGPropertyList fieldList;
-                    fieldList.insert("librevenge:field-type", "text:page-number");
-                    m_painter->insertField(fieldList);
+                    if (text[para].spans[i_spans].field->addTo(fieldList))
+                      m_painter->insertField(fieldList);
                   }
                   else
                     separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
@@ -1047,11 +1047,11 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
             appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
           librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
           m_painter->openSpan(charProps);
-          if (line.spans[i_spans].isPageField)
+          if (line.spans[i_spans].field)
           {
             librevenge::RVNGPropertyList fieldList;
-            fieldList.insert("librevenge:field-type", "text:page-number");
-            m_painter->insertField(fieldList);
+            if (line.spans[i_spans].field->addTo(fieldList))
+              m_painter->insertField(fieldList);
           }
           else
             separateSpacesAndInsertText(m_painter, textString);

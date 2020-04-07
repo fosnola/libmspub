@@ -125,6 +125,7 @@ struct CharacterStyle
     , textScale()
     , letterSpacingInPt()
     , lcid()
+    , fieldId()
   {
   }
   boost::optional<Underline> underline;
@@ -143,6 +144,7 @@ struct CharacterStyle
   boost::optional<double> textScale;
   boost::optional<double> letterSpacingInPt;
   boost::optional<unsigned> lcid;
+  boost::optional<unsigned> fieldId;
 };
 
 enum LineSpacingType
@@ -201,13 +203,32 @@ struct ParagraphStyle
   {
   }
 };
+//! a field
+struct Field
+{
+  /** Defines some basic type for field */
+  enum Type { None, PageCount, PageNumber, Date, Time };
+
+  /** basic constructor */
+  explicit Field(Type type)
+    : m_type(type)
+    , m_DTFormat("")
+  {
+  }
+  /** add the link property to proplist (if possible) */
+  bool addTo(librevenge::RVNGPropertyList &propList) const;
+  //! the type
+  Type m_type;
+  //! the date/time format using strftime format if defined
+  std::string m_DTFormat;
+};
 
 struct TextSpan
 {
-  TextSpan(const std::vector<unsigned char> &c, const CharacterStyle &s) : chars(c), style(s), isPageField(false) { }
+  TextSpan(const std::vector<unsigned char> &c, const CharacterStyle &s) : chars(c), style(s), field() { }
   std::vector<unsigned char> chars;
   CharacterStyle style;
-  bool isPageField;
+  boost::optional<Field> field;
 };
 
 struct TextParagraph
