@@ -80,6 +80,7 @@ MSPUBParser2k::MSPUBParser2k(librevenge::RVNGInputStream *input, MSPUBCollector 
   , m_chunkChildIndicesById()
   , m_chunksBeingRead()
   , m_version(3)
+  , m_isBanner(false)
 {
 }
 
@@ -130,6 +131,12 @@ Color MSPUBParser2k::getColorBy2kHex(unsigned hex)
   default:
     return Color();
   }
+}
+
+ColorReference MSPUBParser2k::getColorReferenceBy2kIndex(unsigned char index)
+{
+  Color col=getColorBy2kIndex(index);
+  return ColorReference(col.r | (col.g<<8) | (col.b<<16));
 }
 
 Color MSPUBParser2k::getColorBy2kIndex(unsigned char index)
@@ -507,7 +514,9 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
     parseChunkHeader(chunk,input,header);
     if (header.headerLength()>=28)   // size 54|6a|b2
     {
-      input->seek(header.m_beginOffset+0x14, librevenge::RVNG_SEEK_SET);
+      input->seek(header.m_beginOffset+0x12, librevenge::RVNG_SEEK_SET);
+      unsigned short coordinateSystemMark = readU16(input);
+      m_isBanner = coordinateSystemMark == 0x0007;
       unsigned width = readU32(input);
       unsigned height = readU32(input);
       m_collector->setWidthInEmu(width);
@@ -611,6 +620,7 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
     header.m_type=C_Ellipse;
     m_collector->setShapeType(chunk.seqNum, ELLIPSE);
     break;
+  case 0xe:
   case 0xf:
     header.m_type=C_Group;
     break;
@@ -625,29 +635,6 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
   }
   input->seek(chunkOffset+3, librevenge::RVNG_SEEK_SET);
   header.m_dataOffset=chunkOffset+readU8(input);
-  if (!header.isShape() && header.m_type!=C_Group) return;
-  if (m_version>=3)
-  {
-    // shape transforms are NOT compounded with group transforms. They are equal to what they would be
-    // if the shape were not part of a group at all. This is different from how MSPUBCollector handles rotations;
-    // we work around the issue by simply not setting the rotation of any group, thereby letting it default to zero.
-    //
-    // Furthermore, line rotations are redundant and need to be treated as zero.
-    unsigned short counterRotationInDegreeTenths = readU16(input);
-    if (header.m_type!=C_Group && header.m_type!=C_Line)
-      m_collector->setShapeRotation(chunk.seqNum, 360. - double(counterRotationInDegreeTenths) / 10);
-  }
-  int xs = translateCoordinateIfNecessary(readS32(input));
-  int ys = translateCoordinateIfNecessary(readS32(input));
-  int xe = translateCoordinateIfNecessary(readS32(input));
-  int ye = translateCoordinateIfNecessary(readS32(input));
-  m_collector->setShapeCoordinatesInEmu(chunk.seqNum, xs, ys, xe, ye);
-  if (header.m_type == C_Text)
-  {
-    input->seek(chunkOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
-    unsigned txtId = readU16(input);
-    m_collector->addTextShape(txtId, chunk.seqNum);
-  }
 }
 
 bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
@@ -692,18 +679,44 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
   m_collector->setShapeBorderPosition(chunk.seqNum, INSIDE_SHAPE); // This appears to be the only possibility for MSPUB2k
   ChunkHeader2k header;
   parseChunkHeader(chunk, input, header);
-  parseShapeFlips(input, header.m_flagOffset, chunk.seqNum, chunk.offset);
+  if (m_version>=3)
+  {
+    // shape transforms are NOT compounded with group transforms. They are equal to what they would be
+    // if the shape were not part of a group at all. This is different from how MSPUBCollector handles rotations;
+    // we work around the issue by simply not setting the rotation of any group, thereby letting it default to zero.
+    //
+    // Furthermore, line rotations are redundant and need to be treated as zero.
+    unsigned short counterRotationInDegreeTenths = readU16(input);
+    if (header.m_type!=C_Group && header.m_type!=C_Line)
+      m_collector->setShapeRotation(chunk.seqNum, 360. - double(counterRotationInDegreeTenths) / 10);
+  }
+  int xs = translateCoordinateIfNecessary(readS32(input));
+  int ys = translateCoordinateIfNecessary(readS32(input));
+  int xe = translateCoordinateIfNecessary(readS32(input));
+  int ye = translateCoordinateIfNecessary(readS32(input));
+  m_collector->setShapeCoordinatesInEmu(chunk.seqNum, xs, ys, xe, ye);
+  parseShapeFormat(input, chunk.seqNum, header);
+  if (header.m_type == C_Text)
+  {
+    input->seek(header.m_beginOffset + getTextIdOffset(), librevenge::RVNG_SEEK_SET);
+    unsigned txtId = readU16(input);
+    m_collector->addTextShape(txtId, chunk.seqNum);
+  }
   if (header.m_type==C_Group)
     return parseGroup(input, chunk.seqNum, page);
-
   if (header.m_type==C_Image)
     assignShapeImgIndex(chunk.seqNum);
-  else
-    parseShapeFill(input, chunk.seqNum, chunk.offset);
-
-  parseShapeLine(input, header.isRectangle(), chunk.offset, chunk.seqNum);
   m_collector->setShapeOrder(chunk.seqNum);
   return true;
+}
+
+void MSPUBParser2k::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
+                                     ChunkHeader2k const &header)
+{
+  parseShapeFlips(input, header.m_flagOffset, seqNum, header.m_beginOffset);
+  if (header.m_type!=C_Image)
+    parseShapeFill(input, seqNum, header.m_beginOffset);
+  parseShapeLine(input, header.isRectangle(), header.m_beginOffset, seqNum);
 }
 
 unsigned MSPUBParser2k::getShapeFillTypeOffset() const
@@ -770,7 +783,13 @@ void MSPUBParser2k::assignShapeImgIndex(unsigned seqNum)
 
 int MSPUBParser2k::translateCoordinateIfNecessary(int coordinate) const
 {
-  return coordinate;
+  if (m_version>=5)
+    return coordinate;
+  const int offset = (m_isBanner ? 120 : 25) * EMUS_IN_INCH;
+  if (std::numeric_limits<int>::min() + offset > coordinate)
+    return std::numeric_limits<int>::min();
+  else
+    return coordinate - offset;
 }
 
 void MSPUBParser2k::parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
@@ -841,6 +860,7 @@ void MSPUBParser2k::parseShapeLine(librevenge::RVNGInputStream *input, bool isRe
 
 bool MSPUBParser2k::parse()
 {
+  m_version=5; // find a method to differentiate 98 and 2k
   std::unique_ptr<librevenge::RVNGInputStream> contents(m_input->getSubStreamByName("Contents"));
   if (!contents)
   {

@@ -22,7 +22,7 @@ namespace libmspub
 {
 
 MSPUBParser97::MSPUBParser97(librevenge::RVNGInputStream *input, MSPUBCollector *collector)
-  : MSPUBParser2k(input, collector), m_isBanner(false)
+  : MSPUBParser2k(input, collector)
 {
   m_collector->useEncodingHeuristic();
 }
@@ -48,29 +48,14 @@ bool MSPUBParser97::parse()
   return m_collector->go();
 }
 
-bool MSPUBParser97::parseDocument(librevenge::RVNGInputStream *input)
-{
-  if (bool(m_documentChunkIndex))
-  {
-    input->seek(m_contentChunks[m_documentChunkIndex.get()].offset + 0x12, librevenge::RVNG_SEEK_SET);
-    unsigned short coordinateSystemMark = readU16(input);
-    m_isBanner = coordinateSystemMark == 0x0007;
-    unsigned width = readU32(input);
-    unsigned height = readU32(input);
-    m_collector->setWidthInEmu(width);
-    m_collector->setHeightInEmu(height);
-    return true;
-  }
-  return false;
-}
-
 void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *input)
 {
   input->seek(0x12, librevenge::RVNG_SEEK_SET);
   unsigned blockStart=readU32(input);
   input->seek(blockStart+4, librevenge::RVNG_SEEK_SET);
   unsigned version=readU16(input);
-  if (version>=200 && version<300) m_version=2;
+  if (version>=200 && version<300) m_version=2; // mspub 2
+  // fixme: find also a method to differentiate mspub 3 and 97
   input->seek(blockStart+14, librevenge::RVNG_SEEK_SET);
   unsigned textStart = readU32(input);
   unsigned textEnd = readU32(input);
@@ -489,15 +474,6 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
   }
 }
 
-int MSPUBParser97::translateCoordinateIfNecessary(int coordinate) const
-{
-  const int offset = (m_isBanner ? 120 : 25) * EMUS_IN_INCH;
-  if (std::numeric_limits<int>::min() + offset > coordinate)
-    return std::numeric_limits<int>::min();
-  else
-    return coordinate - offset;
-}
-
 unsigned MSPUBParser97::getFirstLineOffset() const
 {
   return 0x22;
@@ -518,6 +494,83 @@ unsigned MSPUBParser97::getShapeFillColorOffset() const
   return 0x18;
 }
 
+void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
+                                     ChunkHeader2k const &header)
+{
+  if (m_version>2)
+    return MSPUBParser2k::parseShapeFormat(input, seqNum, header);
+
+  if (input->tell()+9>header.m_dataOffset)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: the zone is too small\n"));
+    return;
+  }
+  input->seek(2, librevenge::RVNG_SEEK_CUR); // flags
+  int colors[3];
+  for (int i=0; i<2; ++i) colors[i]=int(readU8(input));
+  int patternId=int(readU8(input));
+  colors[2]=int(readU8(input));
+  auto val=readU8(input);
+  double width=(val&0x80) ? double(val&0x7f)/4 : double(val);
+  int borderId=int(readS16(input));
+  unsigned flags=0; // FINDME
+  if (width>0)
+  {
+    Color lineColor=getColorBy2kIndex(colors[2]&0xf);
+    double delta=double((colors[2]>>5)&3)/4; // pattern 0: means line color, 3: means 1/4 of color 3/4 of white
+    unsigned rgb[]=
+    {
+      unsigned((1-delta)*double(lineColor.r)+delta*255),
+      unsigned((1-delta)*double(lineColor.g)+delta*255),
+      unsigned((1-delta)*double(lineColor.b)+delta*255)
+    };
+    m_collector->addShapeLine(seqNum, Line(ColorReference(rgb[0]|(rgb[1]<<8)|(rgb[2]<<16)), width*12700, true));
+    if (borderId>=0 && (flags&4))
+    {
+      m_collector->setShapeBorderImageId(seqNum, unsigned(borderId));
+      m_collector->setShapeBorderPosition(seqNum, OUTSIDE_SHAPE);
+    }
+  }
+  if (patternId)
+  {
+    if (patternId==1 || patternId==2)
+      m_collector->setShapeFill(seqNum, std::make_shared<SolidFill>(getColorReferenceBy2kIndex(colors[2-patternId]), 1, m_collector), false);
+    else if (patternId>=3 && patternId<=24)
+    {
+      uint8_t const patterns[]=
+      {
+        0x77, 0xdd, 0x77, 0xdd, 0x77, 0xdd, 0x77, 0xdd,
+        0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, 0xaa,
+        0x88, 0x22, 0x88, 0x22, 0x88, 0x22, 0x88, 0x22,
+        0x00, 0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22,
+        0x08, 0x00, 0x80, 0x00, 0x08, 0x00, 0x80, 0x00,
+        0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x80,
+        0xcc, 0xcc, 0x33, 0x33, 0xcc, 0xcc, 0x33, 0x33,
+        0x88, 0x88, 0x88, 0xff, 0x88, 0x88, 0x88, 0xff,
+        0x88, 0x55, 0x22, 0x55, 0x88, 0x55, 0x22, 0x55,
+        0x11, 0x88, 0x44, 0x22, 0x11, 0x88, 0x44, 0x22,
+        0x11, 0x22, 0x44, 0x88, 0x11, 0x22, 0x44, 0x88,
+        0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+        0x33, 0x99, 0xcc, 0x66, 0x33, 0x99, 0xcc, 0x66,
+        0x33, 0x66, 0xcc, 0x99, 0x33, 0x66, 0xcc, 0x99,
+        0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33,
+        0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
+        0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x55, 0x00,
+        0xff, 0x01, 0x01, 0x01, 0xff, 0x10, 0x10, 0x10,
+        0x01, 0x02, 0x04, 0x08, 0x14, 0x22, 0x41, 0x80,
+        0x11, 0xa2, 0x44, 0x2a, 0x11, 0x8a, 0x44, 0xa8
+      };
+
+      m_collector->setShapeFill(seqNum, std::make_shared<Pattern88Fill>
+                                (m_collector,(uint8_t const(&)[8])(patterns[8*(patternId-3)]),getColorReferenceBy2kIndex(colors[1]), getColorReferenceBy2kIndex(colors[0])), false);
+    }
+    else
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: unknown pattern =%d\n", patternId));
+    }
+  }
+}
 }
 
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

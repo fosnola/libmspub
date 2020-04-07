@@ -19,6 +19,7 @@
 
 namespace libmspub
 {
+class ColorReference;
 struct ListHeader2k;
 
 class MSPUBParser2k : public MSPUBParser
@@ -72,6 +73,8 @@ private:
 
 protected:
   unsigned m_version;
+  bool m_isBanner;
+
   // helper functions
   bool parse2kShapeChunk(ContentChunkReference const &chunk, librevenge::RVNGInputStream *input,
                          boost::optional<unsigned> pageSeqNum = boost::optional<unsigned>(),
@@ -79,20 +82,23 @@ protected:
   void parseShapeLine(librevenge::RVNGInputStream *input, bool isRectangle, unsigned offset, unsigned seqNum);
   void parseChunkHeader(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
                         ChunkHeader2k &header);
+  virtual void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
+                                ChunkHeader2k const &header);
   void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,
                        unsigned chunkOffset);
   bool parseGroup(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned page);
   void assignShapeImgIndex(unsigned seqNum);
   void parseShapeFill(librevenge::RVNGInputStream *input, unsigned seqNum, unsigned chunkOffset);
   bool parseContents(librevenge::RVNGInputStream *input) override;
-  virtual bool parseDocument(librevenge::RVNGInputStream *input);
+  bool parseDocument(librevenge::RVNGInputStream *input);
   unsigned getColorIndexByQuillEntry(unsigned entry) override;
-  virtual int translateCoordinateIfNecessary(int coordinate) const;
+  int translateCoordinateIfNecessary(int coordinate) const;
   virtual unsigned getFirstLineOffset() const;
   virtual unsigned getSecondLineOffset() const;
   virtual unsigned getShapeFillTypeOffset() const;
   virtual unsigned getShapeFillColorOffset() const;
   virtual unsigned getTextIdOffset() const;
+  static ColorReference getColorReferenceBy2kIndex(unsigned char index);
   static Color getColorBy2kIndex(unsigned char index);
   static Color getColorBy2kHex(unsigned hex);
   static unsigned translate2kColorReference(unsigned ref2k);

@@ -30,15 +30,13 @@ class MSPUBParser97 : public MSPUBParser2k
     }
   };
 
-  bool m_isBanner;
-
-  bool parseDocument(librevenge::RVNGInputStream *input) override;
-  int translateCoordinateIfNecessary(int coordinate) const override;
   unsigned getFirstLineOffset() const override;
   unsigned getSecondLineOffset() const override;
   unsigned getShapeFillTypeOffset() const override;
   unsigned getShapeFillColorOffset() const override;
   unsigned getTextIdOffset() const override;
+  void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
+                        ChunkHeader2k const &header) override;
   bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
                        std::vector<CharacterStyle> &styles, std::map<unsigned, unsigned> &posToStyle);
   bool parseParagraphStyles(librevenge::RVNGInputStream *input, unsigned index,
