@@ -10,6 +10,8 @@
 #ifndef INCLUDED_MSPUBPARSER97_H
 #define INCLUDED_MSPUBPARSER97_H
 
+#include <map>
+#include <utility>
 #include <vector>
 
 #include "MSPUBParser2k.h"
@@ -32,6 +34,7 @@ class MSPUBParser97 : public MSPUBParser2k
     }
   };
 
+  bool parseTextListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header);
   void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                         ChunkHeader2k const &header) override;
   bool parseSpanStyles(librevenge::RVNGInputStream *input, unsigned index,
@@ -43,6 +46,7 @@ class MSPUBParser97 : public MSPUBParser2k
   CharacterStyle readCharacterStyle(librevenge::RVNGInputStream *input,
                                     unsigned length);
   void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
+  void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input) override;
   void parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
                           unsigned numCols, unsigned numRows, unsigned width, unsigned height);
   void parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header);
@@ -54,6 +58,7 @@ public:
 
 protected:
   std::vector<ListInfo> m_bulletLists;
+  std::map<unsigned, unsigned> m_chunkIdToTextEndMap;
 };
 }
 

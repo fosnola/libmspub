@@ -26,6 +26,7 @@ namespace libmspub
 MSPUBParser97::MSPUBParser97(librevenge::RVNGInputStream *input, MSPUBCollector *collector)
   : MSPUBParser2k(input, collector)
   , m_bulletLists()
+  , m_chunkIdToTextEndMap()
 {
   m_collector->useEncodingHeuristic();
 }
@@ -35,17 +36,100 @@ bool MSPUBParser97::parse()
   std::unique_ptr<librevenge::RVNGInputStream> contents(m_input->getSubStreamByName("Contents"));
   if (!contents)
   {
-    MSPUB_DEBUG_MSG(("Couldn't get contents stream.\n"));
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parse: Couldn't get contents stream.\n"));
     return false;
   }
   if (!parseContents(contents.get()))
   {
-    MSPUB_DEBUG_MSG(("Couldn't parse contents stream.\n"));
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parse: Couldn't parse contents stream.\n"));
     return false;
   }
   return m_collector->go();
 }
 
+bool MSPUBParser97::parseTextListHeader(librevenge::RVNGInputStream *input, unsigned long endPos, ListHeader2k &header)
+{
+  if (!parseListHeader(input, endPos, header, false)) return false;
+  if (header.m_pointerSize!=2 || header.m_dataOffset+12>endPos ||
+      (endPos-header.m_dataOffset-12)/unsigned(4+header.m_dataSize) < unsigned(header.m_N))
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextListHeader: the zone is to short.\n"));
+    return false;
+  }
+  input->seek(header.m_dataOffset+12, librevenge::RVNG_SEEK_SET);
+  header.m_dataOffset+=12+4*unsigned(header.m_N);
+  header.m_positions.reserve(size_t(header.m_N));
+  for (unsigned i=0; i<header.m_N; ++i) header.m_positions.push_back(readU32(input));
+  return true;
+}
+
+void MSPUBParser97::parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input)
+{
+  ChunkHeader2k header;
+  parseChunkHeader(chunk,input,header);
+  if (header.m_dataOffset<header.m_beginOffset+10)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: the chunk is to short\n"));
+    return;
+  }
+  input->seek(header.m_beginOffset+8, librevenge::RVNG_SEEK_SET);
+  unsigned textChunkId=readU16(input);
+  ContentChunkReference textChunk;
+  if (!getChunkReference(textChunkId, textChunk))
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: can not find the text chunk %x\n", textChunkId));
+    return;
+  }
+  ChunkHeader2k textHeader;
+  parseChunkHeader(textChunk,input,textHeader);
+  if (!textHeader.hasData())
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: can not find the text chunk data %x\n", textChunkId));
+    return;
+  }
+  ListHeader2k listHeader;
+  input->seek(textHeader.m_dataOffset, librevenge::RVNG_SEEK_SET);
+  if (!parseTextListHeader(input, textChunk.end, listHeader) || listHeader.m_dataSize!=10)
+  {
+    MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: can not read the text chunk data %x\n", textChunkId));
+    return;
+  }
+  input->seek(listHeader.m_dataOffset, librevenge::RVNG_SEEK_SET);
+  unsigned actOffset=0,oldId=0;
+  for (auto offset : listHeader.m_positions)
+  {
+    if (offset<actOffset)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: oops, index go background when reading the text chunk data %x\n", textChunkId));
+      m_chunkIdToTextEndMap.clear();
+      return;
+    }
+    auto actPos=input->tell();
+    if (actOffset<offset)
+    {
+      auto id=readU16(input);
+      if (id)
+      {
+        m_chunkIdToTextEndMap[id]=offset-1;
+        oldId=id;
+        actOffset=offset;
+      }
+      else if (oldId)   // text no shown because the textbox is too small
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: increase block=%x in chunk %x\n", oldId, textChunkId));
+        m_chunkIdToTextEndMap[oldId]=offset-1;
+        actOffset=offset;
+      }
+      else
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseTextInfos: oops, something is bad when reading the text chunk data %x\n", textChunkId));
+        m_chunkIdToTextEndMap.clear();
+        return;
+      }
+    }
+    input->seek(actPos+listHeader.m_dataSize, librevenge::RVNG_SEEK_SET);
+  }
+}
 
 void MSPUBParser97::parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input)
 {
@@ -64,7 +148,7 @@ void MSPUBParser97::parseBulletDefinitions(const ContentChunkReference &chunk, l
     return;
   }
   m_bulletLists.reserve(size_t(listHeader.m_N));
-  for (int id=0; id<listHeader.m_N; ++id)
+  for (unsigned id=0; id<listHeader.m_N; ++id)
   {
     unsigned char c=readU8(input);
     int fontSize=int(readU8(input));
@@ -158,6 +242,8 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
   CharacterStyle charStyle;
   ParagraphStyle paraStyle;
 
+  std::map<unsigned,unsigned> textEndToChunkId;
+  for (auto const &it : m_chunkIdToTextEndMap) textEndToChunkId[it.second]=it.first;
   size_t oldParaPos=0; // used to check for empty line
   size_t actChar=0;
   std::vector<CellStyle> cellStyleList;
@@ -194,17 +280,20 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         cellStyleList.push_back(CellStyle());
     }
     unsigned char ch=readU8(input);
+
     // special character
+    bool isEndShape=textEndToChunkId.find(c)!=textEndToChunkId.end();
     auto specialIt=posToTypeMap.find(c);
-    if (specialIt!=posToTypeMap.end())
+    if (specialIt!=posToTypeMap.end() || isEndShape)
     {
+      auto special=specialIt!=posToTypeMap.end() ? specialIt->second : ShapeEnd;
       if (!spanChars.empty())
       {
         actChar+=spanChars.size();
         paraSpans.push_back(TextSpan(spanChars,charStyle));
         spanChars.clear();
       }
-      if (specialIt->second==FieldBegin)   // # 05
+      if (special==FieldBegin)   // # 05
       {
         if (m_version==2)
         {
@@ -246,7 +335,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         continue;
       }
       bool needNewPara=!paraSpans.empty();
-      if (!needNewPara && oldParaPos+2>=unsigned(actPos) && specialIt->second==LineEnd)
+      if (!needNewPara && oldParaPos+2>=unsigned(actPos) && special==LineEnd)
       {
         auto sIt=specialIt;
         if (sIt!=posToTypeMap.end() && sIt->second!=ShapeEnd) ++sIt;
@@ -258,19 +347,24 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         paraSpans.clear();
       }
       oldParaPos=unsigned(actPos);
-      if (specialIt->second==CellEnd)
+      if (special==CellEnd)
         cellEnds.push_back(unsigned(actChar)+1); // offset begin at 1...
-      if (specialIt->second==ShapeEnd)
+      if (special==ShapeEnd || isEndShape)
       {
+        unsigned txtId = isEndShape ? textEndToChunkId.find(c)->second : shape;
         if (!cellEnds.empty())
         {
-          m_collector->setTableCellTextEnds(shape,cellEnds);
+          m_collector->setTableCellTextEnds(txtId,cellEnds);
           cellEnds.clear();
         }
         if (cellStyleList.size()>1)
-          m_collector->setTableCellTextStyles(shape, cellStyleList);
-        m_collector->addTextString(shapeParas, shape++);
-        charStyle=CharacterStyle();
+          m_collector->setTableCellTextStyles(txtId, cellStyleList);
+        m_collector->addTextString(shapeParas, txtId);
+        if (specialIt!=posToTypeMap.end() && special==ShapeEnd)
+        {
+          charStyle=CharacterStyle();
+          ++shape;
+        }
         shapeParas.clear();
         cellStyleList.clear();
         actChar=0;
@@ -815,7 +909,7 @@ void MSPUBParser97::getTextInfo(librevenge::RVNGInputStream *input, unsigned len
   }
 }
 
-void MSPUBParser97::parseClipPath(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header)
+void MSPUBParser97::parseClipPath(librevenge::RVNGInputStream *input, unsigned /*seqNum*/, ChunkHeader2k const &header)
 {
   if (!header.hasData())
   {
@@ -832,13 +926,13 @@ void MSPUBParser97::parseClipPath(librevenge::RVNGInputStream *input, unsigned s
   if (listHeader.m_N<=0) return; // ok, no clip path
   std::vector<Vertex> vertices;
   vertices.reserve(size_t(listHeader.m_N));
-  for (int i=0; i<listHeader.m_N; ++i)
+  for (unsigned i=0; i<listHeader.m_N; ++i)
   {
-    int x = translateCoordinateIfNecessary(readS32(input));
-    int y = translateCoordinateIfNecessary(readS32(input));
+    int x = readS32(input);
+    int y = readS32(input);
     vertices.push_back({x,y});
   }
-  m_collector->setShapeClipPath(seqNum, vertices);
+  // m_collector->setShapeClipPath(seqNum, vertices); checkme point relative to the center shape?
 }
 
 void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsigned seqNum, ChunkHeader2k const &header,
@@ -855,7 +949,7 @@ void MSPUBParser97::parseTableInfoData(librevenge::RVNGInputStream *input, unsig
   {
     input->seek(header.m_dataOffset, librevenge::RVNG_SEEK_SET);
     ListHeader2k listHeader;
-    if (!parseListHeader(input, header.m_endOffset, listHeader, false) || listHeader.m_dataSize!=14 || listHeader.m_N<int(numCols+numRows))
+    if (!parseListHeader(input, header.m_endOffset, listHeader, false) || listHeader.m_dataSize!=14 || listHeader.m_N<numCols+numRows)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser97::parseTableInfoData: can not read the data zone\n"));
     }
@@ -963,16 +1057,24 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
         bColors[j]=readU32(input);
       }
     }
-    if (header.m_type == C_Text && input->tell()+10<=header.m_dataOffset)
+    if (header.m_type == C_Text && input->tell()+11<=header.m_dataOffset)
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
       unsigned txtId = readU16(input);
-      m_collector->addTextShape(txtId, seqNum);
+      auto cIt=m_chunkIdToTextEndMap.find(seqNum);
+      m_collector->addTextShape(cIt!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
+      auto fl=readU8(input);
+      if ((fl>>4)!=1)
+      {
+        MSPUB_DEBUG_MSG(("MSPUBParser97::parseShapeFormat: find %d columns for zone %x\n", int(fl>>4), seqNum));
+      }
     }
     else if (header.m_type == C_Table && input->tell()+(m_version==2 ? 24 : 32)<=header.m_dataOffset)
     {
       input->seek(8, librevenge::RVNG_SEEK_CUR); // margin?
-      m_collector->addTextShape(readU16(input), seqNum);
+      unsigned txtId = readU16(input);
+      auto cIt=m_chunkIdToTextEndMap.find(seqNum);
+      m_collector->addTextShape(cIt!=m_chunkIdToTextEndMap.end() ? seqNum : txtId, seqNum);
       input->seek(2, librevenge::RVNG_SEEK_CUR); // data size ?
       unsigned numCols = readU16(input);
       if (m_version>2) input->seek(4, librevenge::RVNG_SEEK_CUR); // 0?
@@ -983,7 +1085,7 @@ void MSPUBParser97::parseShapeFormat(librevenge::RVNGInputStream *input, unsigne
       if (numRows && numCols)
         parseTableInfoData(input, seqNum, header, numCols, numRows, width, height);
     }
-    else if (header.m_type==C_Image)
+    else if (header.m_type==C_Image || header.m_type==C_OLE)
       parseClipPath(input, seqNum, header);
   }
   else if (header.m_type==C_CustomShape && input->tell()+12<=header.m_dataOffset)

@@ -1816,7 +1816,7 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
                      getCalculatedEncoding());
     ret.insert("style:font-name", str);
   }
-  else if (!m_fonts.empty())
+  else if (!m_fonts.empty() && !m_fonts[0].empty())
   {
     librevenge::RVNGString str;
     appendCharacters(str, m_fonts[0],

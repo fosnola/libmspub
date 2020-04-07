@@ -67,6 +67,7 @@ public:
   {
     ListHeader2k()
       : m_dataOffset(0)
+      , m_pointerSize(2)
       , m_N(0)
       , m_maxN(0)
       , m_dataSize(0)
@@ -76,12 +77,14 @@ public:
     }
     //! the data begin offset
     unsigned m_dataOffset;
+    //! the pointer size
+    unsigned m_pointerSize;
     //! the number of data
-    int m_N;
+    unsigned m_N;
     //! the maximum data
-    int m_maxN;
+    unsigned m_maxN;
     //! the data size (or the last position)
-    int m_dataSize;
+    unsigned m_dataSize;
     //! two unknown value
     int m_values[2];
     //! the position
@@ -103,6 +106,7 @@ protected:
 
   // helper functions
   static ShapeType getShapeType(unsigned char shapeSpecifier);
+  bool getChunkReference(unsigned seqNum, ContentChunkReference &chunk) const;
   bool parse2kShapeChunk(ContentChunkReference const &chunk, librevenge::RVNGInputStream *input,
                          boost::optional<unsigned> pageSeqNum = boost::optional<unsigned>(),
                          bool topLevelCall = true);
@@ -110,6 +114,7 @@ protected:
   void parseChunkHeader(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input,
                         ChunkHeader2k &header);
   virtual void parseBulletDefinitions(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
+  virtual void parseTextInfos(const ContentChunkReference &chunk, librevenge::RVNGInputStream *input);
   virtual void parseShapeFormat(librevenge::RVNGInputStream *input, unsigned seqNum,
                                 ChunkHeader2k const &header);
   void parseShapeFlips(librevenge::RVNGInputStream *input, unsigned flagsOffset, unsigned seqNum,

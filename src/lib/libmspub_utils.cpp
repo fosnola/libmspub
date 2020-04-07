@@ -383,7 +383,7 @@ void appendCharacters(librevenge::RVNGString &text, const std::vector<unsigned c
 {
   if (characters.empty())
   {
-    MSPUB_DEBUG_MSG(("libmspub_utils[appendCharacters]: Attempt to append 0 characters!"));
+    MSPUB_DEBUG_MSG(("libmspub_utils[appendCharacters]: Attempt to append 0 characters!\n"));
     return;
   }
 

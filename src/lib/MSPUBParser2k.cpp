@@ -58,6 +58,15 @@ MSPUBParser2k::~MSPUBParser2k()
 {
 }
 
+bool MSPUBParser2k::getChunkReference(unsigned seqNum, ContentChunkReference &chunk) const
+{
+  auto it=m_fileIdToChunkId.find(seqNum);
+  if (it==m_fileIdToChunkId.end())
+    return false;
+  chunk=m_contentChunks.at(it->second);
+  return true;
+}
+
 // Takes a line width specifier in Pub2k format and translates it into quarter points
 unsigned short translateLineWidth(unsigned char lineWidth)
 {
@@ -360,6 +369,10 @@ void MSPUBParser2k::parseBulletDefinitions(const ContentChunkReference &, librev
 {
 }
 
+void MSPUBParser2k::parseTextInfos(const ContentChunkReference &, librevenge::RVNGInputStream *)
+{
+}
+
 bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
 {
   input->seek(0x16, librevenge::RVNG_SEEK_SET);
@@ -368,6 +381,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   unsigned numBlocks = readU16(input);
   std::set<unsigned> offsetsSet;
   boost::optional<unsigned> bulletChunkIndex;
+  boost::optional<unsigned> textInfoChunkIndex;
   for (unsigned i = 0; i < numBlocks; ++i)
   {
     input->seek(input->tell() + 2, librevenge::RVNG_SEEK_SET);
@@ -393,6 +407,11 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found document chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(DOCUMENT, chunkOffset, 0, id, parent));
       m_documentChunkIndex = chunkId;
+      break;
+    case 0x0016:
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found text info chunk of id 0x%x and parent 0x%x\n", id, parent));
+      m_contentChunks.push_back(ContentChunkReference(TEXT_INFO, chunkOffset, 0, id, parent));
+      textInfoChunkIndex=chunkId;
       break;
     case 0x001e:
       m_contentChunks.push_back(ContentChunkReference(FONT, chunkOffset, 0, id, parent));
@@ -489,6 +508,8 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   // parse the text bullet and the text content
   if (bulletChunkIndex)
     parseBulletDefinitions(m_contentChunks.at(*bulletChunkIndex), input);
+  if (textInfoChunkIndex)
+    parseTextInfos(m_contentChunks.at(*textInfoChunkIndex), input);
   parseContentsTextIfNecessary(input);
   // parse the meta data
   parseMetaData();
@@ -643,13 +664,12 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
 
 bool MSPUBParser2k::parsePage(librevenge::RVNGInputStream *input, unsigned seqNum)
 {
-  auto it=m_fileIdToChunkId.find(seqNum);
-  if (it==m_fileIdToChunkId.end())
+  ContentChunkReference chunk;
+  if (!getChunkReference(seqNum, chunk))
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not find the page %x\n", seqNum));
     return false;
   }
-  auto const &chunk=m_contentChunks.at(it->second);
   ChunkHeader2k header;
   parseChunkHeader(chunk,input,header);
   if (!header.hasData())
@@ -666,14 +686,13 @@ bool MSPUBParser2k::parsePage(librevenge::RVNGInputStream *input, unsigned seqNu
   }
   for (auto cId : ids)
   {
-    auto cIt=m_fileIdToChunkId.find(cId);
-    if (cIt==m_fileIdToChunkId.end())
+    ContentChunkReference cChunk;
+    if (!getChunkReference(cId, cChunk))
     {
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parsePage: can not find child=%x in the page %x\n", cId, seqNum));
       continue;
     }
-    const ContentChunkReference &childChunk = m_contentChunks.at(cIt->second);
-    parse2kShapeChunk(childChunk, input, seqNum, false);
+    parse2kShapeChunk(cChunk, input, seqNum, false);
   }
   return true;
 }
@@ -819,7 +838,7 @@ bool MSPUBParser2k::parseIdList(librevenge::RVNGInputStream *input, unsigned lon
     return false;
   }
   ids.reserve(size_t(listHeader.m_N));
-  for (int id=0; id<listHeader.m_N; ++id) ids.push_back(readU16(input));
+  for (unsigned id=0; id<listHeader.m_N; ++id) ids.push_back(readU16(input));
   return true;
 }
 
@@ -834,13 +853,27 @@ bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned
   header.m_dataOffset=start+10;
   header.m_N=readU16(input);
   header.m_maxN=readU16(input);
+  if (header.m_maxN<header.m_N)
+  {
+    input->seek(start,librevenge::RVNG_SEEK_SET);
+    header.m_N=readU32(input);
+    header.m_maxN=readU32(input);
+    if (start+18>endPos || header.m_maxN<header.m_N)
+    {
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: the header seems corrupted\n"));
+      return false;
+    }
+    header.m_pointerSize=4;
+    header.m_dataOffset=start+18;
+  }
   if (!readPosition)
-    header.m_dataSize=readU16(input);
+    header.m_dataSize=header.m_pointerSize==4 ? readU32(input) : readU16(input);
   else
-    input->seek(2, librevenge::RVNG_SEEK_CUR);
-  for (auto &v: header.m_values) v=readU16(input);
+    input->seek(header.m_pointerSize, librevenge::RVNG_SEEK_CUR);
+  header.m_values[0]=readU16(input);
+  header.m_values[1]=header.m_pointerSize==4 ? readS32(input) : readS16(input);
   if ((header.m_dataSize && (endPos-header.m_dataOffset)/unsigned(header.m_dataSize) < unsigned(header.m_N)) ||
-      (readPosition && endPos-header.m_dataOffset<2*unsigned(header.m_N+1)))
+      (readPosition && endPos-header.m_dataOffset<header.m_pointerSize*unsigned(header.m_N+1)))
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: problem with m_N\n"));
     return false;
@@ -848,7 +881,7 @@ bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned
   if (!readPosition)
     return true;
   header.m_positions.resize(size_t(header.m_N+1));
-  for (auto &p : header.m_positions) p=header.m_dataOffset+readU16(input);
+  for (auto &p : header.m_positions) p=header.m_dataOffset+(header.m_pointerSize==4 ? readU32(input) : readU16(input));
   return true;
 }
 
@@ -1029,13 +1062,12 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
   m_collector->setCurrentGroupSeqNum(seqNum);
   if (m_version<5)
   {
-    auto it=m_fileIdToChunkId.find(seqNum);
-    if (it==m_fileIdToChunkId.end())
+    ContentChunkReference chunk;
+    if (!getChunkReference(seqNum, chunk))
     {
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not find the group %x\n", seqNum));
       return false;
     }
-    auto const &chunk=m_contentChunks.at(it->second);
     ChunkHeader2k header;
     parseChunkHeader(chunk,input,header);
     if (!header.hasData())
@@ -1052,14 +1084,13 @@ bool MSPUBParser2k::parseGroup(librevenge::RVNGInputStream *input, unsigned seqN
     }
     for (auto cId : ids)
     {
-      auto cIt=m_fileIdToChunkId.find(cId);
-      if (cIt==m_fileIdToChunkId.end())
+      ContentChunkReference cChunk;
+      if (!getChunkReference(cId, cChunk))
       {
         MSPUB_DEBUG_MSG(("MSPUBParser2k::parseGroup: can not find child=%x in the group %x\n", cId, seqNum));
         continue;
       }
-      const ContentChunkReference &childChunk = m_contentChunks.at(cIt->second);
-      parse2kShapeChunk(childChunk, input, page, false);
+      parse2kShapeChunk(cChunk, input, page, false);
     }
   }
   else

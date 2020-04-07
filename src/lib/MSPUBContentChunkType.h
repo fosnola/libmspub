@@ -30,7 +30,8 @@ enum MSPUBContentChunkType //Please fill this in and replace magic constants in 
   IMAGE_2K_DATA,
   OLE_2K,
   OLE_2K_DATA,
-  BULLET_DEFINITION
+  BULLET_DEFINITION,
+  TEXT_INFO
 };
 } // namespace libmspub
 
