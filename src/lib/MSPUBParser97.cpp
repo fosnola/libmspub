@@ -676,7 +676,8 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
     if (m_version>=3 && tabPos>=39)
     {
       input->seek(debPos+38, librevenge::RVNG_SEEK_SET);
-      unsigned fancy=readU16(input);
+      unsigned fancy=readU8(input);
+      // unsure, the next byte may be also related to fancy
       if (fancy>=1 && fancy<=15)
       {
         struct Fancy
@@ -696,9 +697,13 @@ bool MSPUBParser97::parseParagraphStyles(librevenge::RVNGInputStream *input, uns
           {0xff3bdc,1}, {0x000000,3}, {0x409040,2,2}, {0x28faff,4} /*it*/
         };
         auto const &fan=fancies[fancy-1];
-        style.m_dropCapLines=fan.m_lines;
-        style.m_dropCapLetters=fan.m_letters;
-        style.m_dropCapColor=fan.m_color;
+        style.m_dropCapStyle=DropCapStyle();
+        style.m_dropCapStyle->m_lines=fan.m_lines;
+        style.m_dropCapStyle->m_letters=fan.m_letters;
+        style.m_dropCapStyle->m_style=CharacterStyle();
+        auto &fontStyle=*style.m_dropCapStyle->m_style;
+        fontStyle.italic=(fancy==11 || fancy==15);
+        fontStyle.colorIndex=int(getColorIndexByQuillEntry(fan.m_color|0x20000000));
       }
       else if (fancy)
       {

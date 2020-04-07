@@ -212,7 +212,10 @@ private:
   void paintTextObject(const ShapeInfo &info, std::vector<TextParagraph> const &text, librevenge::RVNGPropertyList const &frameProps) const;
   double getCalculationValue(const ShapeInfo &info, unsigned index, bool recursiveEntry, const std::vector<int> &adjustValues) const;
 
+  // hack to try to create some drop cap letters...
+  librevenge::RVNGString paintDropCap(librevenge::RVNGString const &text, librevenge::RVNGPropertyList &current, DropCapStyle const &dropStyle) const;
   librevenge::RVNGPropertyList getCharStyleProps(const CharacterStyle &, boost::optional<unsigned> defaultCharStyleIndex) const;
+  librevenge::RVNGPropertyList updateCharStylePropsWithDropCapStyle(librevenge::RVNGPropertyList const &current, DropCapStyle const &dropStyle) const;
   librevenge::RVNGPropertyList getParaStyleProps(const ParagraphStyle &, boost::optional<unsigned> defaultParaStyleIndex) const;
   double getSpecialValue(const ShapeInfo &info, const CustomShape &shape, int arg, const std::vector<int> &adjustValues) const;
   void ponderStringEncoding(const std::vector<TextParagraph> &str);

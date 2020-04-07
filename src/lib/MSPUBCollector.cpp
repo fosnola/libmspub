@@ -1005,26 +1005,33 @@ void MSPUBCollector::paintTextObject(const ShapeInfo &info, std::vector<TextPara
   for (size_t i=0; i<text.size(); ++i)
   {
     const auto &line = text[i];
-    openTextLine(state, line.style);
-    auto const &paraLetterSpacing=line.style.m_letterSpacingInPt;
-
+    auto const &paraStyle=line.style;
+    openTextLine(state, paraStyle);
+    auto const &paraLetterSpacing=paraStyle.m_letterSpacingInPt;
+    bool hasDropStyle= paraStyle.m_dropCapStyle && !paraStyle.m_dropCapStyle->empty();
     for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
     {
-      librevenge::RVNGString textString;
-      if (!line.spans[i_spans].chars.empty())
-        appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
-      librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
+      librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, paraStyle.m_defaultCharStyleIndex);
       if (paraLetterSpacing && !charProps["fo:letter-spacing"])
         charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
-      m_painter->openSpan(charProps);
+
       if (line.spans[i_spans].field)
       {
+        m_painter->openSpan(charProps);
         librevenge::RVNGPropertyList fieldList;
         if (line.spans[i_spans].field->addTo(fieldList))
           m_painter->insertField(fieldList);
+        m_painter->closeSpan();
+        continue;
       }
-      else
-        separateSpacesAndInsertText(m_painter, textString);
+
+      librevenge::RVNGString textString;
+      if (!line.spans[i_spans].chars.empty())
+        appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
+      if (i_spans==0 && hasDropStyle)
+        textString=paintDropCap(textString, charProps,*paraStyle.m_dropCapStyle);
+      m_painter->openSpan(charProps);
+      separateSpacesAndInsertText(m_painter, textString);
       m_painter->closeSpan();
     }
     closeTextLine(state, i+1==text.size());
@@ -1098,24 +1105,39 @@ void MSPUBCollector::paintTable(const ShapeInfo &info, std::vector<TextParagraph
           const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[paraId];
           for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
           {
-            openTextLine(state, text[para].style);
-            auto const &paraLetterSpacing=text[para].style.m_letterSpacingInPt;
+            auto const &paraStyle=text[para].style;
+            openTextLine(state, paraStyle);
+            auto const &paraLetterSpacing=paraStyle.m_letterSpacingInPt;
+            bool hasDropStyle= paraStyle.m_dropCapStyle && !paraStyle.m_dropCapStyle->empty();
 
             for (size_t i_spans = 0; i_spans < paraTexts[para].size(); ++i_spans)
             {
-              librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
+              librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, paraStyle.m_defaultCharStyleIndex);
               if (paraLetterSpacing && !charProps["fo:letter-spacing"])
                 charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
-              m_painter->openSpan(charProps);
               if (text[para].spans[i_spans].field)
               {
+                m_painter->openSpan(charProps);
                 librevenge::RVNGPropertyList fieldList;
                 if (text[para].spans[i_spans].field->addTo(fieldList))
                   m_painter->insertField(fieldList);
+                m_painter->closeSpan();
+                continue;
+              }
+
+              if (i_spans==0 && hasDropStyle)
+              {
+                auto normalString=paintDropCap(paraTexts[para][i_spans], charProps, *paraStyle.m_dropCapStyle);
+                m_painter->openSpan(charProps);
+                separateSpacesAndInsertText(m_painter, normalString);
+                m_painter->closeSpan();
               }
               else
+              {
+                m_painter->openSpan(charProps);
                 separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
-              m_painter->closeSpan();
+                m_painter->closeSpan();
+              }
             }
             closeTextLine(state, para == cellParas.second);
           }
@@ -1685,21 +1707,23 @@ librevenge::RVNGPropertyList MSPUBCollector::getParaStyleProps(const ParagraphSt
   {
     ret.insert("fo:margin-right", (double)rightIndentEmu / EMUS_IN_INCH);
   }
-  unsigned dropCapLines = style.m_dropCapLines.get_value_or(
-                            defaultStyle.m_dropCapLines.get_value_or(0));
-  if (dropCapLines != 0)
+#if 0
+  // style:drop-cap is ignored in LibreOffice draw
+  if (style.m_dropCapStyle || defaultStyle.m_dropCapStyle)
   {
-    // Drop caps are not supported in LibreOffice ...
-    librevenge::RVNGPropertyList dropProp;
-    dropProp.insert("style:lines", (int)dropCapLines);
-    unsigned dropCapLetters = style.m_dropCapLetters.get_value_or(
-                                defaultStyle.m_dropCapLetters.get_value_or(0));
-    if (dropCapLetters != 0)
-      dropProp.insert("style:length", (int)dropCapLetters);
-    librevenge::RVNGPropertyListVector dropPropVector;
-    dropPropVector.append(dropProp);
-    ret.insert("style:drop-cap", dropPropVector);
+    auto const &dStyle=style.m_dropCapStyle ? *style.m_dropCapStyle : *defaultStyle.m_dropCapStyle;
+    if (!dStyle.empty())
+    {
+      // Drop caps are not supported in LibreOffice ...
+      librevenge::RVNGPropertyList dropProp;
+      dropProp.insert("style:lines", (int)*dStyle.m_lines);
+      dropProp.insert("style:length", (int)*dStyle.m_letters);
+      librevenge::RVNGPropertyListVector dropPropVector;
+      dropPropVector.append(dropProp);
+      ret.insert("style:drop-cap", dropPropVector);
+    }
   }
+#endif
 
   auto const &tabStops = !style.m_tabStops.empty() ? style.m_tabStops : defaultStyle.m_tabStops;
   if (!tabStops.empty())
@@ -1844,6 +1868,51 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
   else if (defaultCharStyle.lcid)
     fillLocale(ret, get(defaultCharStyle.lcid));
   return ret;
+}
+
+librevenge::RVNGPropertyList MSPUBCollector::updateCharStylePropsWithDropCapStyle(librevenge::RVNGPropertyList const &current, DropCapStyle const &dropStyle) const
+{
+  librevenge::RVNGPropertyList props(current);
+  if (dropStyle.m_style)
+  {
+    auto cProps=getCharStyleProps(*dropStyle.m_style, unsigned(m_defaultCharStyles.size())); // force no default style
+    librevenge::RVNGPropertyList::Iter i(cProps);
+    for (i.rewind(); i.next();)
+    {
+      if (i.child()) continue; // let ignore child
+      props.insert(i.key(), i()->getStr());
+    }
+  }
+  // try to increase the font size
+  if (props["fo:font-size"])
+  {
+    auto sz=props["fo:font-size"]->getDouble();
+    if (sz>0) props.insert("fo:font-size", dropStyle.m_lines ? sz*(1+double(*dropStyle.m_lines)/2) : sz*1.5);
+  }
+
+  return props;
+}
+
+librevenge::RVNGString MSPUBCollector::paintDropCap(librevenge::RVNGString const &text, librevenge::RVNGPropertyList &current, DropCapStyle const &dropStyle) const
+{
+  if (text.empty() || dropStyle.empty())
+    return text;
+  auto dChar=std::min(*dropStyle.m_letters,unsigned(text.size()));
+  librevenge::RVNGString dropString, normalString;
+  unsigned actChar=0;
+  librevenge::RVNGString::Iter it(text);
+  for (it.rewind(); it.next();)
+  {
+    if (actChar++<dChar)
+      dropString.append(it());
+    else
+      normalString.append(it());
+  }
+  m_painter->openSpan(updateCharStylePropsWithDropCapStyle(current,dropStyle));
+  separateSpacesAndInsertText(m_painter, dropString);
+  m_painter->closeSpan();
+  return normalString;
+
 }
 
 librevenge::RVNGString MSPUBCollector::getColorString(const Color &color)

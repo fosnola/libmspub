@@ -182,6 +182,17 @@ struct TabStop
   boost::optional<unsigned char> m_leaderChar;
 };
 
+struct DropCapStyle
+{
+  boost::optional<CharacterStyle> m_style;
+  boost::optional<unsigned> m_lines;
+  boost::optional<unsigned> m_letters;
+  bool empty() const
+  {
+    return !m_lines || !m_letters || *m_lines==0 || *m_letters==0;
+  }
+};
+
 struct ParagraphStyle
 {
   boost::optional<Alignment> m_align;
@@ -194,14 +205,21 @@ struct ParagraphStyle
   boost::optional<unsigned> m_rightIndentEmu;
   boost::optional<ListInfo> m_listInfo;
   std::vector<TabStop> m_tabStops;
-  boost::optional<unsigned> m_dropCapLines;
-  boost::optional<unsigned> m_dropCapLetters;
-  boost::optional<unsigned> m_dropCapColor; // in abgr
+  boost::optional<DropCapStyle> m_dropCapStyle;
   boost::optional<double> m_letterSpacingInPt;
-  ParagraphStyle() :
-    m_align(), m_defaultCharStyleIndex(), m_lineSpacing(), m_spaceBeforeEmu(),
-    m_spaceAfterEmu(), m_firstLineIndentEmu(), m_leftIndentEmu(),
-    m_rightIndentEmu(), m_listInfo(), m_tabStops(), m_dropCapLines(), m_dropCapLetters(), m_dropCapColor(), m_letterSpacingInPt()
+  ParagraphStyle()
+    : m_align()
+    , m_defaultCharStyleIndex()
+    , m_lineSpacing()
+    , m_spaceBeforeEmu()
+    , m_spaceAfterEmu()
+    , m_firstLineIndentEmu()
+    , m_leftIndentEmu()
+    , m_rightIndentEmu()
+    , m_listInfo()
+    , m_tabStops()
+    , m_dropCapStyle()
+    , m_letterSpacingInPt()
   {
   }
 };

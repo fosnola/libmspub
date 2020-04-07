@@ -1360,10 +1360,12 @@ ParagraphStyle MSPUBParser::getParagraphStyle(librevenge::RVNGInputStream *input
       numberIfRestarted = info.data;
       break;
     case PARAGRAPH_DROP_CAP_LINES:
-      ret.m_dropCapLines = info.data;
+      if (!ret.m_dropCapStyle) ret.m_dropCapStyle=DropCapStyle();
+      ret.m_dropCapStyle->m_lines = info.data;
       break;
     case PARAGRAPH_DROP_CAP_LETTERS:
-      ret.m_dropCapLetters = info.data;
+      if (!ret.m_dropCapStyle) ret.m_dropCapStyle=DropCapStyle();
+      ret.m_dropCapStyle->m_letters = info.data;
       break;
     default:
       break;
