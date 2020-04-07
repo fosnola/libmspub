@@ -1733,7 +1733,7 @@ librevenge::RVNGString MSPUBCollector::getColorString(const Color &color)
 {
   librevenge::RVNGString ret;
   ret.sprintf("#%.2x%.2x%.2x",(unsigned char)color.r, (unsigned char)color.g, (unsigned char)color.b);
-  MSPUB_DEBUG_MSG(("String for r: 0x%x, g: 0x%x, b: 0x%x is %s\n", color.r, color.g, color.b, ret.cstr()));
+  //MSPUB_DEBUG_MSG(("String for r: 0x%x, g: 0x%x, b: 0x%x is %s\n", color.r, color.g, color.b, ret.cstr()));
   return ret;
 }
 

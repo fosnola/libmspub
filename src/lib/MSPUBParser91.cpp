@@ -1065,6 +1065,7 @@ bool MSPUBParser91::parsePageIds(librevenge::RVNGInputStream *input)
   {
     id=readU16(input);
     m_collector->addPage(id);
+    m_collector->setNextPage(id);
   }
   return true;
 }

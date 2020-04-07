@@ -6148,9 +6148,10 @@ librevenge::RVNGPropertyList calcClipPath(const std::vector<Vertex> &verts, doub
 
 void writeCustomShape(ShapeType shapeType, librevenge::RVNGPropertyList &graphicsProps, librevenge::RVNGDrawingInterface *painter, double x, double y, double height, double width, bool closeEverything, VectorTransformation2D transform, std::vector<Line> lines, std::function<double(unsigned index)> calculator, const std::vector<Color> &palette, std::shared_ptr<const CustomShape> shape)
 {
-  MSPUB_DEBUG_MSG(("***STARTING CUSTOM SHAPE***\n"));
+  //MSPUB_DEBUG_MSG(("***STARTING CUSTOM SHAPE***\n"));
   if (!shape)
   {
+    MSPUB_DEBUG_MSG(("libmspub::writeCustomShape[PolygonUtils.cpp]: called with no shape\n"));
     return;
   }
   bool drawStroke = !lines.empty();

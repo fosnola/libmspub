@@ -471,6 +471,12 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
       m_contentChunks.push_back(ContentChunkReference(GROUP, chunkOffset, 0, id, parent));
       m_shapeChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
       break;
+    case 0x0027:
+      // TODO: read the child image and add it to the master's background...
+      MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found special paper chunk 0x%x, ignored\n", id));
+      m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
+      m_unknownChunkIndices.push_back(unsigned(m_contentChunks.size() - 1));
+      break;
     default:
       MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents:Found unknown chunk of id 0x%x and parent 0x%x\n", id, parent));
       m_contentChunks.push_back(ContentChunkReference(UNKNOWN_CHUNK, chunkOffset, 0, id, parent));
@@ -592,6 +598,8 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
       unsigned height = readU32(input);
       m_collector->setWidthInEmu(width);
       m_collector->setHeightInEmu(height);
+      // FINISHME: read the end of this field
+      // v3: size=106, in pos=68: paper special id[type=27], type=23, type=31, font, art, type=16, ...
     }
     else
     {
@@ -617,7 +625,10 @@ bool MSPUBParser2k::parseDocument(librevenge::RVNGInputStream *input)
           m_collector->addPage(masterId);
           m_collector->designateMasterPage(masterId);
           for (auto p : pages)
+          {
+            m_collector->setNextPage(p);
             m_collector->setMasterPage(p, masterId);
+          }
         }
       }
     }
