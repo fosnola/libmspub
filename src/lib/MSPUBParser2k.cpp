@@ -138,7 +138,7 @@ Color MSPUBParser2k::getColorBy2kHex(unsigned hex)
 ColorReference MSPUBParser2k::getColorReferenceBy2kIndex(unsigned char index)
 {
   Color col=getColorBy2kIndex(index);
-  return ColorReference(col.r | (col.g<<8) | (col.b<<16));
+  return ColorReference(unsigned(col.r | (col.g<<8) | (col.b<<16)));
 }
 
 Color MSPUBParser2k::getColorBy2kIndex(unsigned char index)
@@ -273,7 +273,7 @@ unsigned MSPUBParser2k::translate2kColorReference(unsigned ref2k)
   default:
   {
     Color c = getColorBy2kHex(ref2k);
-    return (c.r) | (c.g << 8) | (c.b << 16);
+    return unsigned((c.r) | (c.g << 8) | (c.b << 16));
   }
   }
 }
@@ -489,7 +489,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   for (unsigned int paletteChunkIndex : m_paletteChunkIndices)
   {
     const ContentChunkReference &chunk = m_contentChunks.at(paletteChunkIndex);
-    input->seek(chunk.offset, librevenge::RVNG_SEEK_SET);
+    input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
     input->seek(0xA0, librevenge::RVNG_SEEK_CUR);
     for (unsigned j = 0; j < 8; ++j)
     {
@@ -503,7 +503,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   for (unsigned int imageDataChunkIndex : m_imageDataChunkIndices)
   {
     const ContentChunkReference &chunk = m_contentChunks.at(imageDataChunkIndex);
-    input->seek(chunk.offset + 4, librevenge::RVNG_SEEK_SET);
+    input->seek(long(chunk.offset) + 4, librevenge::RVNG_SEEK_SET);
     unsigned toRead = readU32(input);
     librevenge::RVNGBinaryData img;
     readData(input, toRead, img);
@@ -514,7 +514,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
   for (unsigned int oleDataChunkIndex : m_oleDataChunkIndices)
   {
     const ContentChunkReference &chunk = m_contentChunks.at(oleDataChunkIndex);
-    input->seek(chunk.offset, librevenge::RVNG_SEEK_SET);
+    input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
     ChunkHeader2k header;
     parseChunkHeader(chunk,input,header);
     if (header.hasData())
@@ -536,7 +536,7 @@ bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
     auto const &objectMap=oleParser.getObjectsMap();
     for (auto id : oleIds)
     {
-      auto it=objectMap.find(id);
+      auto it=objectMap.find(int(id));
       if (it==objectMap.end())
       {
         MSPUB_DEBUG_MSG(("MSPUBParser2k::parseContents: can not find OLE %d.\n", int(id)));
@@ -755,7 +755,7 @@ bool MSPUBParser2k::parseListHeader(librevenge::RVNGInputStream *input, unsigned
   else
     input->seek(2, librevenge::RVNG_SEEK_CUR);
   for (auto &v: header.m_values) v=readU16(input);
-  if ((header.m_dataSize && (endPos-header.m_dataOffset)/header.m_dataSize < unsigned(header.m_N)) ||
+  if ((header.m_dataSize && (endPos-header.m_dataOffset)/unsigned(header.m_dataSize) < unsigned(header.m_N)) ||
       (readPosition && endPos-header.m_dataOffset<2*unsigned(header.m_N+1)))
   {
     MSPUB_DEBUG_MSG(("MSPUBParser2k::parseListHeader: problem with m_N\n"));
@@ -772,7 +772,7 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
                                      ChunkHeader2k &header)
 {
   auto const &chunkOffset=chunk.offset;
-  input->seek(chunkOffset, librevenge::RVNG_SEEK_SET);
+  input->seek(long(chunkOffset), librevenge::RVNG_SEEK_SET);
   header.m_beginOffset=unsigned(chunk.offset);
   header.m_fileType=readU16(input);
   header.m_endOffset=unsigned(chunk.end);
@@ -822,7 +822,7 @@ void MSPUBParser2k::parseChunkHeader(ContentChunkReference const &chunk, libreve
   default:
     break;
   }
-  input->seek(chunkOffset+3, librevenge::RVNG_SEEK_SET);
+  input->seek(long(chunkOffset)+3, librevenge::RVNG_SEEK_SET);
   header.m_dataOffset=unsigned(chunkOffset+readU8(input));
 }
 
@@ -837,7 +837,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
   const ChunkNestingGuard guard(m_chunksBeingRead, chunk.seqNum);
 
   unsigned page = pageSeqNum.get_value_or(chunk.parentSeqNum);
-  input->seek(chunk.offset, librevenge::RVNG_SEEK_SET);
+  input->seek(long(chunk.offset), librevenge::RVNG_SEEK_SET);
   if (topLevelCall && m_version>2)
   {
     // ignore non top level shapes
@@ -846,7 +846,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
     {
       if (m_contentChunks.at(pageIndex).seqNum == chunk.parentSeqNum)
       {
-        i_page = pageIndex;
+        i_page = int(pageIndex);
         break;
       }
     }
@@ -854,7 +854,7 @@ bool MSPUBParser2k::parse2kShapeChunk(const ContentChunkReference &chunk, librev
     {
       return false;
     }
-    if (getPageTypeBySeqNum(m_contentChunks[i_page].seqNum) != NORMAL)
+    if (getPageTypeBySeqNum(m_contentChunks[size_t(i_page)].seqNum) != NORMAL)
     {
       return false;
     }

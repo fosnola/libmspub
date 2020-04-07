@@ -5926,8 +5926,8 @@ ShapeElementCommand getCommandFromBinary(unsigned short binary)
 
 double getSpecialIfNecessary(std::function<double(unsigned index)> calculator, int val)
 {
-  bool special = val & 0x80000000;
-  return special ? calculator(val ^ 0x80000000) : val;
+  bool special = unsigned(val) & 0x80000000;
+  return special ? calculator(unsigned(val) ^ 0x80000000) : val;
 }
 
 namespace

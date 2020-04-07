@@ -160,11 +160,11 @@ unsigned correctModulo(int x, unsigned n) // returns the canonical representatio
     //sign of result is implementation defined
     if (result < 0)
     {
-      return n + result;
+      return n + unsigned(result);
     }
-    return result;
+    return unsigned(result);
   }
-  return x % n;
+  return unsigned(x) % n;
 }
 
 librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData deflated)
@@ -183,7 +183,7 @@ librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData deflated)
   {
     return librevenge::RVNGBinaryData();
   }
-  int have;
+  unsigned have;
   unsigned left = unsigned(deflated.size());
   do
   {
@@ -199,7 +199,7 @@ librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData deflated)
         inflateEnd(&strm);
         return librevenge::RVNGBinaryData();
       }
-      have = ZLIB_CHUNK - strm.avail_out;
+      have = unsigned(ZLIB_CHUNK - strm.avail_out);
       inflated.append(out, have);
     }
     while (strm.avail_out == 0);

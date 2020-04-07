@@ -227,7 +227,7 @@ void mapTableTextToCells(
     {
       librevenge::RVNGString textString;
       appendCharacters(textString, text[para].spans[i_spans].chars, encoding);
-      offset += textString.len();
+      offset += unsigned(textString.len());
       // TODO: why do we not drop these during parse already?
       if ((i_spans == text[para].spans.size() - 1) && (textString == "\r"))
         continue;
@@ -623,7 +623,7 @@ std::vector<int> MSPUBCollector::getShapeAdjustValues(const ShapeInfo &info) con
   {
     unsigned index = i->first;
     int adjustVal = i->second;
-    for (unsigned j = info.m_adjustValues.size(); j <= index; ++j)
+    for (size_t j = info.m_adjustValues.size(); j <= size_t(index); ++j)
     {
       ret.push_back(0);
     }
@@ -1148,7 +1148,7 @@ bool MSPUBCollector::paintBorderArts(ShapeInfo const &info, Coordinate const &co
     bool needImage=padding>0 || oneBitColor;
     for (int b=0; b<2; ++b)
     {
-      size_t wh=(axis==0 ? 1+4*b : 7-4*b);
+      size_t wh=size_t(axis==0 ? 1+4*b : 7-4*b);
       auto const &bi = ba.m_images[indices[wh]];
       double actPos[2]=
       {
@@ -1300,7 +1300,7 @@ double MSPUBCollector::getSpecialValue(const ShapeInfo &info, const CustomShape 
 {
   if (PROP_ADJUST_VAL_FIRST <= arg && PROP_ADJUST_VAL_LAST >= arg)
   {
-    unsigned adjustIndex = arg - PROP_ADJUST_VAL_FIRST;
+    unsigned adjustIndex = unsigned(arg - PROP_ADJUST_VAL_FIRST);
     if (adjustIndex < adjustValues.size())
     {
       if ((shape.m_adjustShiftMask >> adjustIndex) & 0x1)
@@ -1675,11 +1675,11 @@ librevenge::RVNGPropertyList MSPUBCollector::getCharStyleProps(const CharacterSt
 
   if (style.colorIndex >= 0 && (size_t)style.colorIndex < m_textColors.size())
   {
-    ret.insert("fo:color", getColorString(m_textColors[style.colorIndex].getFinalColor(m_paletteColors)));
+    ret.insert("fo:color", getColorString(m_textColors[size_t(style.colorIndex)].getFinalColor(m_paletteColors)));
   }
   else if (defaultCharStyle.colorIndex >= 0 && (size_t)defaultCharStyle.colorIndex < m_textColors.size())
   {
-    ret.insert("fo:color", getColorString(m_textColors[defaultCharStyle.colorIndex].getFinalColor(m_paletteColors)));
+    ret.insert("fo:color", getColorString(m_textColors[size_t(defaultCharStyle.colorIndex)].getFinalColor(m_paletteColors)));
   }
   else
   {

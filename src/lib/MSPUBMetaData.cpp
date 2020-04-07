@@ -298,7 +298,7 @@ bool libmspub::MSPUBMetaData::parseTimes(librevenge::RVNGInputStream *input)
 
   // Seek to the Root Directory Entry
   size_t sectorSize = size_t(std::pow(2, sectorShift));
-  input->seek((firstDirSectorLocation + 1) * sectorSize, librevenge::RVNG_SEEK_SET);
+  input->seek(long((firstDirSectorLocation + 1) * sectorSize), librevenge::RVNG_SEEK_SET);
   // DirectoryEntryName: 64 bytes
   // DirectoryEntryNameLength: 2 bytes
   // ObjectType: 1 byte

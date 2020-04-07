@@ -139,7 +139,7 @@ void MSPUBParser97::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
         paraSpans.clear();
       }
       if (pIt!=posToParaMap.end() && pIt->second<paraStyles.size()) paraStyle=paraStyles[pIt->second];
-      oldParaPos=actPos;
+      oldParaPos=unsigned(actPos);
     }
     unsigned char ch=readU8(input);
     // special character
@@ -468,7 +468,7 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
   if (m_version<=2)
   {
     if (length >= 8)
-      style.colorIndex = getColorIndexByQuillEntry(readU8(input));
+      style.colorIndex = int(getColorIndexByQuillEntry(readU8(input)));
     if (length >= 9)
     {
       unsigned fl=length>=10 ? readU16(input) : readU8(input);
@@ -495,7 +495,7 @@ CharacterStyle MSPUBParser97::readCharacterStyle(
   else if (length >= 16)
   {
     input->seek(begin + 0xC, librevenge::RVNG_SEEK_SET);
-    style.colorIndex = getColorIndexByQuillEntry(readU32(input));
+    style.colorIndex = int(getColorIndexByQuillEntry(readU32(input)));
   }
   style.textSizeInPt = 10 +
                        static_cast<double>(textSizeVariationFromDefault) / 2;

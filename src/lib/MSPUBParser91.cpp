@@ -33,7 +33,7 @@ struct BlockInfo91
   {
   }
   //! the main id
-  int m_id;
+  unsigned m_id;
   //! the parent id: -1 means none
   int m_parentId;
   //! the file offset
@@ -203,7 +203,7 @@ bool MSPUBParser91::parseContents(librevenge::RVNGInputStream *input)
   if (!parseBlockInfos(input))
     return false;
 
-  auto backIt=m_data->m_idToBlockMap.find(m_data->m_mainZoneIds[1]);
+  auto backIt=m_data->m_idToBlockMap.find(unsigned(m_data->m_mainZoneIds[1]));
   if (backIt!=m_data->m_idToBlockMap.end() && !backIt->second.m_child.empty())
   {
     unsigned masterId=unsigned(m_data->m_mainZoneIds[1]);
@@ -289,7 +289,7 @@ void MSPUBParser91::parseContentsTextIfNecessary(librevenge::RVNGInputStream *in
     }
     for (size_t i=0; i<N; ++i)
     {
-      input->seek(plcHeader.m_dataOffset+20*i+4, librevenge::RVNG_SEEK_SET);
+      input->seek(long(plcHeader.m_dataOffset+20*i+4), librevenge::RVNG_SEEK_SET);
       unsigned zId=readU16(input);
       if (textLimits[i+1]<textLimits[i] || textLimits[i+1]>textEnd)
       {
@@ -662,7 +662,7 @@ bool MSPUBParser91::parseBlockInfos(librevenge::RVNGInputStream *input)
   for (unsigned i = 0; i < numBlocks; ++i)
   {
     BlockInfo91 block;
-    block.m_id=int(readU16(input));
+    block.m_id=readU16(input);
     block.m_parentId=int(readS16(input));
     block.m_offset = readU16(input);
     block.m_data=int(readS16(input));
@@ -681,7 +681,7 @@ bool MSPUBParser91::parseBlockInfos(librevenge::RVNGInputStream *input)
   }
   for (auto bl : otherBlocks)
   {
-    auto pIt=mainIdToBlockMap.find(bl.m_parentId);
+    auto pIt=mainIdToBlockMap.find(unsigned(bl.m_parentId));
     if (pIt==mainIdToBlockMap.end())
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseBlockInfos: can not find parent %d for block with id=%d\n", bl.m_parentId, bl.m_id));
@@ -766,14 +766,14 @@ bool MSPUBParser91::parseShape(librevenge::RVNGInputStream *input, BlockInfo91 c
   case 3:
   {
     // now 0-6: unknown, 7-14: dim1, 15-22: dim2, 23-24: unknown, 25-28: size
-    auto dataIt=m_data->m_idToBlockMap.find(info.m_data);
+    auto dataIt=m_data->m_idToBlockMap.find(unsigned(info.m_data));
     if (dataIt==m_data->m_idToBlockMap.end() || info.m_data<0)
     {
       MSPUB_DEBUG_MSG(("MSPUBParser91::parseShape: can not data block %d for block with id=%d\n", info.m_data, info.m_id));
       break;
     }
     m_collector->setShapeType(info.m_id,PICTURE_FRAME);
-    m_collector->setShapeImgIndex(info.m_id,info.m_data);
+    m_collector->setShapeImgIndex(info.m_id,unsigned(info.m_data));
     parseImage(input, dataIt->second);
     break;
   }
@@ -863,7 +863,7 @@ bool MSPUBParser91::parseImage(librevenge::RVNGInputStream *input, BlockInfo91 c
     return false;
   }
   unsigned long len=readU32(input);
-  if (input->seek(info.m_offset+len,librevenge::RVNG_SEEK_SET)!=0 || len<10)
+  if (input->seek(info.m_offset+long(len),librevenge::RVNG_SEEK_SET)!=0 || len<10)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser91::parseImage: can not find the block %d end\n", info.m_id));
     return false;
@@ -933,7 +933,7 @@ bool MSPUBParser91::parseOLEPicture(librevenge::RVNGInputStream *input, unsigned
     {
       auto c=readU8(input);
       if (c)
-        name+=c;
+        name+=char(c);
       else if (i+1!=sSz)
       {
         MSPUB_DEBUG_MSG(("MSPUBParser91::parseOLEPicture: can not read a name\n"));
@@ -1074,11 +1074,11 @@ bool MSPUBParser91::parseZoneHeader(librevenge::RVNGInputStream *input, ZoneHead
   unsigned pos=unsigned(input->tell());
   header.m_N=int(readU16(input));
   header.m_maxN=int(readU16(input));
-  header.m_lastValue=int(readU16(input));
+  header.m_lastValue=readU16(input);
   header.m_type=int(readU16(input)); // 0: pages, 2:font, 3:border art
   header.m_headerSize=int(readU16(input));
-  auto const &dataPos=header.m_dataOffset=pos+header.m_headerSize;
-  if (header.m_headerSize<10 || input->seek(dataPos+2*header.m_N,librevenge::RVNG_SEEK_SET)!=0)
+  auto const &dataPos=header.m_dataOffset=pos+unsigned(header.m_headerSize);
+  if (header.m_headerSize<10 || input->seek(long(dataPos)+2*header.m_N,librevenge::RVNG_SEEK_SET)!=0)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser91::parseZoneHeader: unexpected zone header for type=%d\n", header.m_type));
     return false;
@@ -1101,8 +1101,8 @@ bool MSPUBParser91::parseTextPLCHeader(librevenge::RVNGInputStream *input, TextP
   header.m_dataSize=int(readU16(input));
   input->seek(12, librevenge::RVNG_SEEK_CUR);
   header.m_textOffset=readU32(input);
-  auto const &dataPos=header.m_dataOffset=pos+22+4*header.m_N;
-  if (input->seek(dataPos+header.m_dataSize*header.m_N,librevenge::RVNG_SEEK_SET)!=0)
+  auto const &dataPos=header.m_dataOffset=pos+22+4*unsigned(header.m_N);
+  if (input->seek(long(dataPos)+header.m_dataSize*header.m_N,librevenge::RVNG_SEEK_SET)!=0)
   {
     MSPUB_DEBUG_MSG(("MSPUBParser91::parseTextPLCHeader: unexpected zone header\n"));
     return false;
