@@ -953,174 +953,182 @@ std::function<void(void)> MSPUBCollector::paintShape(const ShapeInfo &info, cons
     }
 
     if (isTable)
-    {
-      librevenge::RVNGPropertyListVector columnWidths;
-      for (unsigned int col : get(info.m_tableInfo).m_columnWidthsInEmu)
-      {
-        librevenge::RVNGPropertyList columnWidth;
-        columnWidth.insert("style:column-width", double(col) / EMUS_IN_INCH);
-        columnWidths.append(columnWidth);
-      }
-      props.insert("librevenge:table-columns", columnWidths);
-
-      m_painter->startTableObject(props);
-
-      const std::map<unsigned, std::vector<unsigned> >::const_iterator it = m_tableCellTextEndsByTextId.find(get(info.m_textId));
-      const std::vector<unsigned> &tableCellTextEnds = (it != m_tableCellTextEndsByTextId.end()) ? it->second : std::vector<unsigned>();
-
-      TableLayout tableLayout(boost::extents[get(info.m_tableInfo).m_numRows][get(info.m_tableInfo).m_numColumns]);
-      createTableLayout(get(info.m_tableInfo).m_cells, tableLayout);
-
-      ParagraphToCellMap_t paraToCellMap;
-      ParagraphTexts_t paraTexts;
-      mapTableTextToCells(text, tableCellTextEnds, getCalculatedEncoding(), paraToCellMap, paraTexts);
-
-      unsigned numStyles=0;
-      std::vector<CellStyle> const *styles=nullptr;
-      auto const &stylesIt=m_tableCellStylesByTextId.find(get(info.m_textId));
-      if (stylesIt!=m_tableCellStylesByTextId.end())
-      {
-        styles=&stylesIt->second;
-        numStyles=unsigned(styles->size());
-      }
-      unsigned cell=0, cellParaId=0;
-      for (unsigned row = 0; row != tableLayout.shape()[0]; ++row)
-      {
-        librevenge::RVNGPropertyList rowProps;
-        if (row < (get(info.m_tableInfo).m_rowHeightsInEmu.size()))
-          rowProps.insert("style:row-height", double(get(info.m_tableInfo).m_rowHeightsInEmu[row]) / EMUS_IN_INCH);
-        m_painter->openTableRow(rowProps);
-
-        for (unsigned col = 0; col != tableLayout.shape()[1]; ++col, ++cellParaId)
-        {
-          librevenge::RVNGPropertyList cellProps;
-          cellProps.insert("librevenge:column", int(col));
-          cellProps.insert("librevenge:row", int(row));
-          if (cell<numStyles)(*styles)[cell++].addTo(cellProps, m_paletteColors);
-
-          if (isCovered(tableLayout[row][col]))
-          {
-            m_painter->insertCoveredTableCell(cellProps);
-          }
-          else
-          {
-            if (tableLayout[row][col].m_colSpan > 1)
-              cellProps.insert("table:number-columns-spanned", int(tableLayout[row][col].m_colSpan));
-            if (tableLayout[row][col].m_rowSpan > 1)
-              cellProps.insert("table:number-rows-spanned", int(tableLayout[row][col].m_rowSpan));
-
-            m_painter->openTableCell(cellProps);
-            auto paraId=info.m_tableInfo->m_tableCoveredCellHasTextFlag ? cellParaId : tableLayout[row][col].m_cell;
-            if (paraId < paraToCellMap.size())
-            {
-              TextLineState state;
-              const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[paraId];
-              for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
-              {
-                openTextLine(state, text[para].style);
-                auto const &paraLetterSpacing=text[para].style.m_letterSpacingInPt;
-
-                for (size_t i_spans = 0; i_spans < paraTexts[para].size(); ++i_spans)
-                {
-                  librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
-                  if (paraLetterSpacing && !charProps["fo:letter-spacing"])
-                    charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
-                  m_painter->openSpan(charProps);
-                  if (text[para].spans[i_spans].field)
-                  {
-                    librevenge::RVNGPropertyList fieldList;
-                    if (text[para].spans[i_spans].field->addTo(fieldList))
-                      m_painter->insertField(fieldList);
-                  }
-                  else
-                    separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
-                  m_painter->closeSpan();
-                }
-                closeTextLine(state, para == cellParas.second);
-              }
-            }
-
-            m_painter->closeTableCell();
-          }
-        }
-
-        m_painter->closeTableRow();
-      }
-
-      m_painter->endTableObject();
-    }
+      paintTable(info, text, props);
     else // a text object
-    {
-      Margins margins = info.m_margins.get_value_or(Margins());
-      props.insert("fo:padding-left", (double)margins.m_left / EMUS_IN_INCH);
-      props.insert("fo:padding-top", (double)margins.m_top / EMUS_IN_INCH);
-      props.insert("fo:padding-right", (double)margins.m_right / EMUS_IN_INCH);
-      props.insert("fo:padding-bottom", (double)margins.m_bottom / EMUS_IN_INCH);
-      if (bool(info.m_verticalAlign))
-      {
-        switch (info.m_verticalAlign.get())
-        {
-        default:
-        case TOP:
-          props.insert("draw:textarea-vertical-align", "top");
-          break;
-        case MIDDLE:
-          props.insert("draw:textarea-vertical-align", "middle");
-          break;
-        case BOTTOM:
-          props.insert("draw:textarea-vertical-align", "bottom");
-          break;
-        }
-      }
-      if (info.m_numColumns)
-      {
-        unsigned ncols = info.m_numColumns.get_value_or(0);
-        if (ncols > 0)
-          props.insert("fo:column-count", (int)ncols);
-      }
-      if (info.m_columnSpacing)
-      {
-        unsigned ngap = info.m_columnSpacing;
-        if (ngap > 0)
-          props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
-      }
-      m_painter->startTextObject(props);
-      TextLineState state;
-      for (size_t i=0; i<text.size(); ++i)
-      {
-        const auto &line = text[i];
-        openTextLine(state, line.style);
-        auto const &paraLetterSpacing=line.style.m_letterSpacingInPt;
-
-        for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
-        {
-          librevenge::RVNGString textString;
-          if (!line.spans[i_spans].chars.empty())
-            appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
-          librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
-          if (paraLetterSpacing && !charProps["fo:letter-spacing"])
-            charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
-          m_painter->openSpan(charProps);
-          if (line.spans[i_spans].field)
-          {
-            librevenge::RVNGPropertyList fieldList;
-            if (line.spans[i_spans].field->addTo(fieldList))
-              m_painter->insertField(fieldList);
-          }
-          else
-            separateSpacesAndInsertText(m_painter, textString);
-          m_painter->closeSpan();
-        }
-        closeTextLine(state, i+1==text.size());
-      }
-      m_painter->endTextObject();
-    }
+      paintTextObject(info, text, props);
   }
   if (makeLayer)
   {
     m_painter->endLayer();
   }
   return &no_op;
+}
+
+void MSPUBCollector::paintTextObject(const ShapeInfo &info, std::vector<TextParagraph> const &text, librevenge::RVNGPropertyList const &frameProps) const
+{
+  librevenge::RVNGPropertyList props(frameProps);
+  Margins margins = info.m_margins.get_value_or(Margins());
+  props.insert("fo:padding-left", (double)margins.m_left / EMUS_IN_INCH);
+  props.insert("fo:padding-top", (double)margins.m_top / EMUS_IN_INCH);
+  props.insert("fo:padding-right", (double)margins.m_right / EMUS_IN_INCH);
+  props.insert("fo:padding-bottom", (double)margins.m_bottom / EMUS_IN_INCH);
+  if (bool(info.m_verticalAlign))
+  {
+    switch (info.m_verticalAlign.get())
+    {
+    default:
+    case TOP:
+      props.insert("draw:textarea-vertical-align", "top");
+      break;
+    case MIDDLE:
+      props.insert("draw:textarea-vertical-align", "middle");
+      break;
+    case BOTTOM:
+      props.insert("draw:textarea-vertical-align", "bottom");
+      break;
+    }
+  }
+  if (info.m_numColumns)
+  {
+    unsigned ncols = info.m_numColumns.get_value_or(0);
+    if (ncols > 0)
+      props.insert("fo:column-count", (int)ncols);
+  }
+  if (info.m_columnSpacing)
+  {
+    unsigned ngap = info.m_columnSpacing;
+    if (ngap > 0)
+      props.insert("fo:column-gap", (double)ngap / EMUS_IN_INCH);
+  }
+  m_painter->startTextObject(props);
+  TextLineState state;
+  for (size_t i=0; i<text.size(); ++i)
+  {
+    const auto &line = text[i];
+    openTextLine(state, line.style);
+    auto const &paraLetterSpacing=line.style.m_letterSpacingInPt;
+
+    for (size_t i_spans = 0; i_spans < line.spans.size(); ++i_spans)
+    {
+      librevenge::RVNGString textString;
+      if (!line.spans[i_spans].chars.empty())
+        appendCharacters(textString, line.spans[i_spans].chars, getCalculatedEncoding());
+      librevenge::RVNGPropertyList charProps = getCharStyleProps(line.spans[i_spans].style, line.style.m_defaultCharStyleIndex);
+      if (paraLetterSpacing && !charProps["fo:letter-spacing"])
+        charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
+      m_painter->openSpan(charProps);
+      if (line.spans[i_spans].field)
+      {
+        librevenge::RVNGPropertyList fieldList;
+        if (line.spans[i_spans].field->addTo(fieldList))
+          m_painter->insertField(fieldList);
+      }
+      else
+        separateSpacesAndInsertText(m_painter, textString);
+      m_painter->closeSpan();
+    }
+    closeTextLine(state, i+1==text.size());
+  }
+  m_painter->endTextObject();
+}
+
+void MSPUBCollector::paintTable(const ShapeInfo &info, std::vector<TextParagraph> const &text, librevenge::RVNGPropertyList const &frameProps) const
+{
+  librevenge::RVNGPropertyList pList(frameProps);
+  librevenge::RVNGPropertyListVector columnWidths;
+  for (unsigned int col : get(info.m_tableInfo).m_columnWidthsInEmu)
+  {
+    librevenge::RVNGPropertyList columnWidth;
+    columnWidth.insert("style:column-width", double(col) / EMUS_IN_INCH);
+    columnWidths.append(columnWidth);
+  }
+  pList.insert("librevenge:table-columns", columnWidths);
+
+  m_painter->startTableObject(pList);
+
+  const std::map<unsigned, std::vector<unsigned> >::const_iterator it = m_tableCellTextEndsByTextId.find(get(info.m_textId));
+  const std::vector<unsigned> &tableCellTextEnds = (it != m_tableCellTextEndsByTextId.end()) ? it->second : std::vector<unsigned>();
+
+  TableLayout tableLayout(boost::extents[get(info.m_tableInfo).m_numRows][get(info.m_tableInfo).m_numColumns]);
+  createTableLayout(get(info.m_tableInfo).m_cells, tableLayout);
+
+  ParagraphToCellMap_t paraToCellMap;
+  ParagraphTexts_t paraTexts;
+  mapTableTextToCells(text, tableCellTextEnds, getCalculatedEncoding(), paraToCellMap, paraTexts);
+
+  unsigned numStyles=0;
+  std::vector<CellStyle> const *styles=nullptr;
+  auto const &stylesIt=m_tableCellStylesByTextId.find(get(info.m_textId));
+  if (stylesIt!=m_tableCellStylesByTextId.end())
+  {
+    styles=&stylesIt->second;
+    numStyles=unsigned(styles->size());
+  }
+  unsigned cell=0, cellParaId=0;
+  for (unsigned row = 0; row != tableLayout.shape()[0]; ++row)
+  {
+    librevenge::RVNGPropertyList rowProps;
+    if (row < (get(info.m_tableInfo).m_rowHeightsInEmu.size()))
+      rowProps.insert("style:row-height", double(get(info.m_tableInfo).m_rowHeightsInEmu[row]) / EMUS_IN_INCH);
+    m_painter->openTableRow(rowProps);
+
+    for (unsigned col = 0; col != tableLayout.shape()[1]; ++col, ++cellParaId)
+    {
+      librevenge::RVNGPropertyList cellProps;
+      cellProps.insert("librevenge:column", int(col));
+      cellProps.insert("librevenge:row", int(row));
+      if (cell<numStyles)(*styles)[cell++].addTo(cellProps, m_paletteColors);
+
+      if (isCovered(tableLayout[row][col]))
+      {
+        m_painter->insertCoveredTableCell(cellProps);
+      }
+      else
+      {
+        if (tableLayout[row][col].m_colSpan > 1)
+          cellProps.insert("table:number-columns-spanned", int(tableLayout[row][col].m_colSpan));
+        if (tableLayout[row][col].m_rowSpan > 1)
+          cellProps.insert("table:number-rows-spanned", int(tableLayout[row][col].m_rowSpan));
+
+        m_painter->openTableCell(cellProps);
+        auto paraId=info.m_tableInfo->m_tableCoveredCellHasTextFlag ? cellParaId : tableLayout[row][col].m_cell;
+        if (paraId < paraToCellMap.size())
+        {
+          TextLineState state;
+          const std::pair<unsigned, unsigned> &cellParas = paraToCellMap[paraId];
+          for (unsigned para = cellParas.first; para <= cellParas.second; ++para)
+          {
+            openTextLine(state, text[para].style);
+            auto const &paraLetterSpacing=text[para].style.m_letterSpacingInPt;
+
+            for (size_t i_spans = 0; i_spans < paraTexts[para].size(); ++i_spans)
+            {
+              librevenge::RVNGPropertyList charProps = getCharStyleProps(text[para].spans[i_spans].style, text[para].style.m_defaultCharStyleIndex);
+              if (paraLetterSpacing && !charProps["fo:letter-spacing"])
+                charProps.insert("fo:letter-spacing", get(paraLetterSpacing), librevenge::RVNG_POINT);
+              m_painter->openSpan(charProps);
+              if (text[para].spans[i_spans].field)
+              {
+                librevenge::RVNGPropertyList fieldList;
+                if (text[para].spans[i_spans].field->addTo(fieldList))
+                  m_painter->insertField(fieldList);
+              }
+              else
+                separateSpacesAndInsertText(m_painter, paraTexts[para][i_spans]);
+              m_painter->closeSpan();
+            }
+            closeTextLine(state, para == cellParas.second);
+          }
+        }
+
+        m_painter->closeTableCell();
+      }
+    }
+
+    m_painter->closeTableRow();
+  }
+
+  m_painter->endTableObject();
 }
 
 void MSPUBCollector::openTextLine(TextLineState &state, const ParagraphStyle &paraStyle) const

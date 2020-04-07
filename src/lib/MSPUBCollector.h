@@ -208,6 +208,8 @@ private:
   void addPageMasterName(unsigned pageNum, librevenge::RVNGPropertyList &propList, bool createIsNeeded) const;
 
   std::function<void(void)> paintShape(const ShapeInfo &info, const Coordinate &relativeTo, const VectorTransformation2D &foldedTransform, bool isGroup, const VectorTransformation2D &thisTransform) const;
+  void paintTable(const ShapeInfo &info, std::vector<TextParagraph> const &text, librevenge::RVNGPropertyList const &frameProps) const;
+  void paintTextObject(const ShapeInfo &info, std::vector<TextParagraph> const &text, librevenge::RVNGPropertyList const &frameProps) const;
   double getCalculationValue(const ShapeInfo &info, unsigned index, bool recursiveEntry, const std::vector<int> &adjustValues) const;
 
   librevenge::RVNGPropertyList getCharStyleProps(const CharacterStyle &, boost::optional<unsigned> defaultCharStyleIndex) const;
