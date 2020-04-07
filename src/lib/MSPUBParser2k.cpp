@@ -19,6 +19,7 @@
 #include "Fill.h"
 #include "Line.h"
 #include "MSPUBCollector.h"
+#include "MSPUBMetaData.h"
 #include "OLEParser.h"
 #include "ShapeType.h"
 #include "libmspub_utils.h"
@@ -382,6 +383,8 @@ void MSPUBParser2k::parseContentsTextIfNecessary(librevenge::RVNGInputStream *)
 bool MSPUBParser2k::parseContents(librevenge::RVNGInputStream *input)
 {
   parseContentsTextIfNecessary(input);
+  parseMetaData();
+
   input->seek(0x16, librevenge::RVNG_SEEK_SET);
   unsigned trailerOffset = readU32(input);
   input->seek(trailerOffset, librevenge::RVNG_SEEK_SET);
