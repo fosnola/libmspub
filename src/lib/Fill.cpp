@@ -84,6 +84,23 @@ void PatternFill::getProperties(librevenge::RVNGPropertyList *out) const
   }
 }
 
+Pattern88Fill::Pattern88Fill(const MSPUBCollector *owner, uint8_t const(&data)[8], ColorReference const &col0, ColorReference const &col1)
+  : Fill(owner)
+  , m_col0(col0)
+  , m_col1(col1)
+{
+  for (int i=0; i<8; ++i) m_data[i]=data[i];
+}
+
+void Pattern88Fill::getProperties(librevenge::RVNGPropertyList *out) const
+{
+  out->insert("draw:fill", "bitmap");
+  librevenge::RVNGBinaryData data=createPNGForSimplePattern(m_data, m_col0.getFinalColor(m_owner->m_paletteColors), m_col1.getFinalColor(m_owner->m_paletteColors));
+  out->insert("librevenge:mime-type", mimeByImgType(PNG));
+  out->insert("draw:fill-image", data.getBase64Data());
+  out->insert("draw:fill-image-ref-point", "top-left");
+}
+
 SolidFill::SolidFill(ColorReference color, double opacity, const MSPUBCollector *owner) : Fill(owner), m_color(color), m_opacity(opacity)
 {
 }

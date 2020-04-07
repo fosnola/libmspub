@@ -48,6 +48,7 @@ class MSPUBCollector
   friend class SolidFill;
   friend class GradientFill;
   friend class PatternFill;
+  friend class Pattern88Fill;
 public:
   typedef std::list<ContentChunkReference>::const_iterator ccr_iterator_t;
 

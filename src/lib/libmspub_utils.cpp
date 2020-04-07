@@ -424,6 +424,136 @@ bool stillReading(librevenge::RVNGInputStream *input, unsigned long until)
   return true;
 }
 
+//! Internal: small function to store an unsigned value in big endian
+static void writeBEU32(unsigned char *buffer, const unsigned value)
+{
+  *(buffer++) = static_cast<unsigned char>((value >> 24) & 0xFF);
+  *(buffer++) = static_cast<unsigned char>((value >> 16) & 0xFF);
+  *(buffer++) = static_cast<unsigned char>((value >> 8) & 0xFF);
+  *(buffer++) = static_cast<unsigned char>(value & 0xFF);
+}
+
+//! Internal: add a chunk zone in a PNG file
+static void addChunkInPNG(unsigned chunkType, unsigned char const *buffer, unsigned length, librevenge::RVNGBinaryData &data)
+{
+  unsigned char buf4[4];
+  writeBEU32(buf4, length);
+  data.append(buf4, 4); // add length
+  writeBEU32(buf4, chunkType);
+  data.append(buf4, 4); // add type
+  unsigned crc=unsigned(crc32(0, buf4, 4));
+  if (length)
+  {
+    data.append(buffer, length); // add data
+    writeBEU32(buf4, unsigned(crc32(crc,buffer, length))); // add crc
+  }
+  else
+    writeBEU32(buf4, crc); // add crc
+  data.append(buf4, 4);
+}
+
+/** Internal: helper function to create a PNG knowing the ihdr, image zone
+    and the palette zone(indexed bitmap)
+ */
+static bool createPNGFile(unsigned char const *ihdr, unsigned ihdrSize,
+                          unsigned char const *image, unsigned imageSize,
+                          unsigned char const *palette, unsigned paletteSize,
+                          librevenge::RVNGBinaryData &data)
+{
+  unsigned char const signature[] =
+  {
+    /* PNG signature */
+    0x89, 0x50, 0x4e, 0x47,
+    0x0d, 0x0a, 0x1a, 0x0a
+  };
+  data.append(signature, MSPUB_N_ELEMENTS(signature));
+
+  if (ihdr && ihdrSize)
+    addChunkInPNG(0x49484452 /* IHDR*/, ihdr, ihdrSize, data);
+  if (palette && paletteSize)
+    addChunkInPNG(0x504C5445 /*PLTE*/, palette, paletteSize, data);
+  // now compress the picture
+  const unsigned tmpBufSize = 128 * 1024;
+  std::unique_ptr<unsigned char[]> tmpBuffer{new unsigned char[tmpBufSize]};
+  std::vector<unsigned char> idatBuffer;
+
+  z_stream strm;
+  strm.zalloc = 0;
+  strm.zfree = 0;
+  strm.next_in = const_cast<unsigned char *>(image);
+  strm.avail_in = imageSize;
+  strm.next_out = tmpBuffer.get();
+  strm.avail_out = tmpBufSize;
+  deflateInit(&strm, Z_RLE);
+  while (strm.avail_in != 0)
+  {
+    if (deflate(&strm, Z_NO_FLUSH)!=Z_OK) return false;
+    if (strm.avail_out == 0)
+    {
+      idatBuffer.insert(idatBuffer.end(), tmpBuffer.get(), tmpBuffer.get() + tmpBufSize);
+      strm.next_out = tmpBuffer.get();
+      strm.avail_out = tmpBufSize;
+    }
+  }
+  while (deflate(&strm, Z_FINISH)==Z_OK)
+  {
+    if (strm.avail_out == 0)
+    {
+      idatBuffer.insert(idatBuffer.end(), tmpBuffer.get(), tmpBuffer.get() + tmpBufSize);
+      strm.next_out = tmpBuffer.get();
+      strm.avail_out = tmpBufSize;
+    }
+  }
+  idatBuffer.insert(idatBuffer.end(), tmpBuffer.get(), tmpBuffer.get() + tmpBufSize - strm.avail_out);
+  deflateEnd(&strm);
+
+  addChunkInPNG(0x49444154/*IDAT*/, idatBuffer.data(), unsigned(idatBuffer.size()), data);
+  addChunkInPNG(0x49454e44 /*IEND*/, nullptr, 0, data);
+  return true;
+}
+
+librevenge::RVNGBinaryData createPNGForSimplePattern(uint8_t const(&pattern)[8], Color const &col0, Color const &col1)
+{
+  unsigned char ihdr[] =
+  {
+    /* IHDR -- Image header */
+    0, 0, 0, 8,           // width
+    0, 0, 0, 8,           // height
+    1,                    // bit depth
+    (unsigned char) 3,    // 3: indexed
+    0,                    // compression method: 0=deflate
+    0,                    // filter method: 0=adaptative
+    0                     // interlace method: 0=none
+  };
+
+  unsigned const lineWidth=1+8/8;
+  unsigned const imageSize=lineWidth*8;
+
+  // create the image data
+  std::unique_ptr<unsigned char[]> imageBuffer{new unsigned char[imageSize]};
+  unsigned char *imagePtr=imageBuffer.get();
+
+  for (int j = 0; j < 8; j++)
+  {
+    *(imagePtr++) = 0; // 0: means none
+    *(imagePtr++) = pattern[j];
+  }
+  // create a black and white palette
+  unsigned const nColors=2;
+  std::unique_ptr<unsigned char[]> paletteBuffer{new unsigned char[3*unsigned(nColors)]};
+  unsigned char *palettePtr=paletteBuffer.get();
+  for (int i=0; i<2; ++i)
+  {
+    auto const &col = i==1 ? col1 : col0;
+    *(palettePtr++)=col.r;
+    *(palettePtr++)=col.g;
+    *(palettePtr++)=col.b;
+  }
+  librevenge::RVNGBinaryData res;
+  createPNGFile(ihdr, unsigned(MSPUB_N_ELEMENTS(ihdr)), imageBuffer.get(), imageSize, paletteBuffer.get(), 3*unsigned(nColors), res);
+  return res;
+}
+
 }
 
 /* vim:set shiftwidth=2 softtabstop=2 expandtab: */

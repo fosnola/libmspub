@@ -60,6 +60,19 @@ private:
   PatternFill &operator=(const ImgFill &);
 };
 
+class Pattern88Fill : public Fill
+{
+  ColorReference m_col0;
+  ColorReference m_col1;
+  uint8_t m_data[8];
+public:
+  Pattern88Fill(const MSPUBCollector *owner, uint8_t const(&data)[8], ColorReference const &col0, ColorReference const &col1);
+  void getProperties(librevenge::RVNGPropertyList *out) const override;
+private:
+  Pattern88Fill(const Pattern88Fill &) = delete;
+  Pattern88Fill &operator=(const Fill &) = delete;
+};
+
 class SolidFill : public Fill
 {
   ColorReference m_color;

@@ -56,6 +56,8 @@ void debugPrint(const char *format, ...) MSPUB_ATTRIBUTE_PRINTF(1, 2);
 #define MSPUB_DEBUG(M)
 #endif
 
+#define MSPUB_N_ELEMENTS(m) sizeof(m)/sizeof(m[0])
+
 namespace libmspub
 {
 const char *mimeByImgType(ImgType type);
@@ -111,6 +113,7 @@ class GenericException
 };
 
 librevenge::RVNGBinaryData inflateData(librevenge::RVNGBinaryData);
+librevenge::RVNGBinaryData createPNGForSimplePattern(uint8_t const(&pattern)[8], Color const &col0, Color const &col1);
 
 } // namespace libmspub
 
